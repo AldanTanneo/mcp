@@ -26,21 +26,21 @@
  *                                                                        *
  **************************************************************************/
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <unordered_map>
-#include <algorithm>
 #include "mcp-matrix+formula.hpp"
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <unordered_map>
+#include <vector>
 
 using namespace std;
 
-const string STDIN  = "STDIN";
+const string STDIN = "STDIN";
 const string STDOUT = "STDOUT";
 const string test_group = "test_group";
 
-string input  = STDIN;
+string input = STDIN;
 string output = STDOUT;
 string formula_prefix;
 ifstream infile;
@@ -55,78 +55,53 @@ vector<string> pivot;
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-void read_args(int argc, char *argv[]) {	// reads the input parameters
+void read_args(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "--input"
-	|| arg == "-i") {
+    if (arg == "--input" || arg == "-i") {
       input = argv[++argument];
-    } else if (arg == "--output"
-    	       || arg == "-o") {
+    } else if (arg == "--output" || arg == "-o") {
       output = argv[++argument];
-    } else if (arg == "--pivot"
-	       || arg == "--pvt") {
+    } else if (arg == "--pivot" || arg == "--pvt") {
       pivot_file = argv[++argument];
-    } else if (arg == "--formula"
-	       || arg == "--logic"
-	       || arg == "--log"
-	       || arg == "-l") {
+    } else if (arg == "--formula" || arg == "--logic" || arg == "--log" ||
+               arg == "-l") {
       formula_prefix = argv[++argument];
-    } else if (arg == "--prediction"
-	       || arg == "--predict"
-	       || arg == "--pdx") {
+    } else if (arg == "--prediction" || arg == "--predict" || arg == "--pdx") {
       predict = argv[++argument];
-    } else if (arg == "--pr"
-	       || arg == "--print") {
+    } else if (arg == "--pr" || arg == "--print") {
       string prt = argv[++argument];
-      if (prt == "clause"
-	  || prt == "clausal"
-	  || prt == "cl"
-	  || prt == "c") {
-	print = pCLAUSE;
-      } else if (prt == "implication"
-		 || prt == "impl"
-		 || prt == "imp"
-		 || prt == "im"
-		 || prt == "i") {
-	print = pIMPL;
-      } else if (prt == "mix"
-		 || prt == "mixed"
-		 || prt == "m") {
-	print = pMIX;
-      } else if (prt == "dimacs"
-		 || prt == "DIMACS") {
-	print = pDIMACS;
+      if (prt == "clause" || prt == "clausal" || prt == "cl" || prt == "c") {
+        print = pCLAUSE;
+      } else if (prt == "implication" || prt == "impl" || prt == "imp" ||
+                 prt == "im" || prt == "i") {
+        print = pIMPL;
+      } else if (prt == "mix" || prt == "mixed" || prt == "m") {
+        print = pMIX;
+      } else if (prt == "dimacs" || prt == "DIMACS") {
+        print = pDIMACS;
       } else
-	cerr <<  "+++ unknown print option " << prt << endl;
-    } else if (arg == "--matrix"
-	       || arg == "--mtx"
-	       || arg == "-m") {
+        cerr << "+++ unknown print option " << prt << endl;
+    } else if (arg == "--matrix" || arg == "--mtx" || arg == "-m") {
       string mtx = argv[++argument];
-      if (mtx == "yes"
-	  || mtx == "y"
-	  || mtx == "show") {
-	display = ySHOW;
+      if (mtx == "yes" || mtx == "y" || mtx == "show") {
+        display = ySHOW;
       } else if (mtx == "peek") {
-	display = yPEEK;
-      } else if (mtx == "no"
-		 || mtx == "n"
-		 || mtx == "hide") {
-	display = yHIDE;
-      } else if (mtx == "undefined"
-		 || mtx == "undef"
-		 || mtx == "u") {
-	display = yUNDEF;
+        display = yPEEK;
+      } else if (mtx == "no" || mtx == "n" || mtx == "hide") {
+        display = yHIDE;
+      } else if (mtx == "undefined" || mtx == "undef" || mtx == "u") {
+        display = yUNDEF;
       } else
-	cerr << "+++ unknown matrix print option " << mtx << endl;
+        cerr << "+++ unknown matrix print option " << mtx << endl;
     } else
       cerr << "+++ unknown option " << arg << endl;
     ++argument;
   }
 }
 
-void adjust_and_open () {
+void adjust_and_open() {
   if (formula_prefix.empty()) {
     cerr << "+++ Formulas missing" << endl;
     exit(2);
@@ -156,24 +131,25 @@ void adjust_and_open () {
     print = pMIX;
 }
 
-void print_arg () {
+void print_arg() {
   cout << "@@@ Parameters:" << endl;
   cout << "@@@ ===========" << endl;
   cout << "@@@ version       = " << version << endl;
   cout << "@@@ input         = " << input << endl;
   cout << "@@@ output        = " << output << endl;
-  cout << "@@@ pivot         = " << (pivot_file.empty() ? "none" : pivot_file) << endl;
-  cout << "@@@ prediction    = " << (predict.empty() ? "none" : predict) << endl;
+  cout << "@@@ pivot         = " << (pivot_file.empty() ? "none" : pivot_file)
+       << endl;
+  cout << "@@@ prediction    = " << (predict.empty() ? "none" : predict)
+       << endl;
   cout << "@@@ var. offset   = " << offset << endl;
   cout << "@@@ print matrix  = " << display_strg[display]
        << (display == yUNDEF ? " (will be changed)" : "") << endl;
   cout << "@@@ print formula = " << print_strg[print] << endl;
   cout << "@@@ formula input = " << formula_prefix + "_*.log" << endl;
   cout << endl;
-
 }
 
-void get_formulas () {
+void get_formulas() {
   time_t start_time = time(nullptr);
   const string lsname = "/tmp/mcp-ls-" + to_string(start_time) + ".txt";
   const string filestar = formula_prefix + "_*.log";
@@ -198,8 +174,8 @@ void get_formulas () {
   string file_string;
   unordered_map<string, string> formula_file;
   while (ls_in >> file_string) {
-    string temp1 = file_string.substr(formula_prefix.length()+1);
-    string gp = temp1.substr(0, temp1.length()-4);
+    string temp1 = file_string.substr(formula_prefix.length() + 1);
+    string gp = temp1.substr(0, temp1.length() - 4);
     grps.push_back(gp);
     formula_file[gp] = file_string;
   }
@@ -242,7 +218,7 @@ void get_formulas () {
   cout << endl;
 }
 
-void read_matrix (Group_of_Matrix &matrix) {
+void read_matrix(Group_of_Matrix &matrix) {
   streambuf *backup;
   if (input != STDIN) {
     backup = cin.rdbuf();
@@ -294,7 +270,7 @@ void read_matrix (Group_of_Matrix &matrix) {
 
     matrix[test_group].push_back(temp);
   }
-  
+
   if (input != STDIN) {
     infile.close();
     cin.rdbuf(backup);
@@ -302,28 +278,27 @@ void read_matrix (Group_of_Matrix &matrix) {
 
   if (display == yUNDEF) {
     display = (numline * arity > MTXLIMIT) ? yHIDE : yPEEK;
-    cout << "@@@ print matrix  = " << display_strg[display]
-       << " (redefined)" << endl;
+    cout << "@@@ print matrix  = " << display_strg[display] << " (redefined)"
+         << endl;
   }
 }
 
-void print_matrix (Matrix &gmtx) {
+void print_matrix(Matrix &gmtx) {
   cout << "+++ Arity = " << arity << endl;
-  cout << "+++ Test Group [" << gmtx.size() << "]:" << endl;
+  cout << "+++ Test Group [" << gmtx.num_rows() << "]:" << endl;
   if (display == yPEEK || display == ySHOW)
     cout << gmtx << endl;
   sort(grps.begin(), grps.end());
 }
 
-void print_formula (const vector<int> &names,
-		    const Formula &formula,
-		    const string gp) {
+void print_formula(const vector<int> &names, const Formula &formula,
+                   const string gp) {
   string strg_fm = formula2string(names, formula);
   cout << "+++ Formula for '" << gp << "' [" << formula.size() << "] =" << endl;
   cout << strg_fm << endl;
 }
 
-void sat_test (Group_of_Matrix &matrix) {
+void sat_test(Group_of_Matrix &matrix) {
   Matrix gmtx = matrix[test_group];
   bool no_id = pivot_file.empty();
   long ctr = SENTINEL;
@@ -343,38 +318,39 @@ void sat_test (Group_of_Matrix &matrix) {
   //     }
   //   cout << endl;
   // }
-  cout << endl << "+++ Result: " << gmtx.size() << " row(s) in " << predict << endl;
+  cout << endl
+       << "+++ Result: " << gmtx.size() << " row(s) in " << predict << endl;
   cout << "+++ end of run +++" << endl;
   if (output != STDOUT)
     outfile.close();
 
   if (!predict.empty()) {
-      pdxfile.open(predict);
-      if (! pdxfile.is_open()) {
-	cerr << "+++ Cannot open predict file " << predict << endl;
-	exit(2);
-      }
-      
-      ctr = SENTINEL;
-      it_pivot = 0;
-      for (Row row : gmtx) {
-	if (pivot_file.empty())
-	  pdxfile << "row_" << ++ctr;
-	else
-	  pdxfile << pivot[it_pivot++];
-	string separator = ",";
-	for (string gp : grps)
-	  if (sat_formula(row, formula[gp])) {
-	    pdxfile << separator << gp;
-	    separator = "+";
-	  }
-	pdxfile << endl;
-      }
-      pdxfile.close();
+    pdxfile.open(predict);
+    if (!pdxfile.is_open()) {
+      cerr << "+++ Cannot open predict file " << predict << endl;
+      exit(2);
+    }
+
+    ctr = SENTINEL;
+    it_pivot = 0;
+    for (Row row : gmtx) {
+      if (pivot_file.empty())
+        pdxfile << "row_" << ++ctr;
+      else
+        pdxfile << pivot[it_pivot++];
+      string separator = ",";
+      for (string gp : grps)
+        if (sat_formula(row, formula[gp])) {
+          pdxfile << separator << gp;
+          separator = "+";
+        }
+      pdxfile << endl;
+    }
+    pdxfile.close();
   }
 }
 
-void get_pivot (const Matrix &matrix) {
+void get_pivot(const Matrix &matrix) {
   if (pivot_file.empty())
     return;
 
@@ -393,16 +369,14 @@ void get_pivot (const Matrix &matrix) {
 
   if (pivot.size() != matrix.size()) {
     cerr << "+++ Size discrepancy between pivot[" << pivot.size()
-	 << "] and matrix[" << matrix.size()
-	 << endl;
+         << "] and matrix[" << matrix.size() << endl;
     exit(2);
   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   version += "predict";
 
   read_args(argc, argv);

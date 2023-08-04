@@ -23,23 +23,31 @@
  *                                                                        *
  **************************************************************************/
 
+#include <cstdint>
+#include <iomanip>
 #include <iostream>
 // #include <sstream>
-#include <vector>
-#include <algorithm>
 #include "mcp-matrix+formula.hpp"
+#include <algorithm>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 using namespace std;
 
 //------------------------------------------------------------------------------
 
-string version       = GLOBAL_VERSION;
-const int SENTINEL   = -1;
-const double RSNTNL  = -1.0;
-const int MTXLIMIT   = 4000;
+string version = GLOBAL_VERSION;
+const int SENTINEL = -1;
+const double RSNTNL = -1.0;
+const int MTXLIMIT = 4000;
 
-const string print_strg[]     = {"void",       "clause",     "implication", "mixed",   "DIMACS"};
-const string display_strg[]   = {"undefined",  "hide",       "peek",        "section", "show"};
+const string print_strg[] = {"void", "clause", "implication", "mixed",
+                             "DIMACS"};
+const string display_strg[] = {"undefined", "hide", "peek", "section", "show"};
+const string sign_string[] = {/*lnone*/ "?",
+                              /*lneg*/ "<=", /*lpos*/ ">=", /*lboth*/ "<=>"};
 
 // const string neg[2]  = {"-", "\\neg "};
 // const string disj[2] = {" + ", " \\lor "};
@@ -52,43 +60,255 @@ string varid = "x";
 bool varswitch = false;
 vector<string> varnames;
 
-Action action       = aALL;
-string selected     = "";
-Print print         = pVOID;
-Display display     = yUNDEF;
+Action action = aALL;
+string selected = "";
+Print print = pVOID;
+Display display = yUNDEF;
 string suffix;
-int arity           = 0;
-int offset          = 0;
+int arity = 0;
+int offset = 0;
 
 //------------------------------------------------------------------------------
 
-bool sat_clause (const Row &tuple, const Clause &clause) {
-  // does the tuple satisfy the clause?
-  for (int i = 0; i < tuple.size(); ++i)
-    if (clause[i] == lpos && tuple[i] == true
-	||
-	clause[i] == lneg && tuple[i] == false)
-      return true;
-  return false;
+void Row::inplace_minimum(const Row &other) & {
+  for (size_t i = 0; i < other.size(); ++i) {
+    if (operator[](i) > other[i]) {
+      operator[](i) = other[i];
+    }
+  }
 }
 
-bool sat_formula (const Row &tuple, const Formula &formula) {
-  // does the tuple satisfy the formula?
-  for (Clause cl : formula)
-    if (!sat_clause(tuple, cl))
+void Row::inplace_minimum(const RowView &other) & {
+  for (size_t i = 0; i < other.size(); ++i) {
+    if (operator[](i) > other[i]) {
+      operator[](i) = other[i];
+    }
+  }
+}
+
+void Row::restrict(const Mask &m) {
+  size_t col = 0;
+  for (size_t j = 0; j < m.size(); ++j) {
+    if (m[j]) {
+      // invariant: col <= j
+      data[col] = data[j];
+      col += 1;
+    }
+  }
+  data.resize(col);
+}
+
+bool Row::operator>=(const Row &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] > operator[](i))
       return false;
+  }
   return true;
 }
 
-vector<string> split (string strg, string delimiters) {
+bool Row::operator>(const Row &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] >= operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool Row::operator==(const Row &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] != operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool RowView::operator>=(const RowView &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] > operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool RowView::operator>(const RowView &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] >= operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool RowView::operator==(const RowView &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] != operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool RowView::operator==(const Row &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] != operator[](i))
+      return false;
+  }
+  return true;
+}
+
+Row RowView::to_row() const {
+  Row res(size());
+  for (int i = 0; i < size(); ++i) {
+    res[i] = data[cols[i]];
+  }
+  return res;
+}
+
+void Matrix::delete_row(size_t index) {
+  // swap and forget last row
+  size_t last = num_rows() - 1;
+
+  if (index != last)
+    std::swap(data[index], data[last]);
+  data.resize(last);
+}
+
+Matrix MatrixMask::to_matrix() const & {
+  vector<Row> data;
+  data.reserve(num_rows());
+
+  for (size_t i = 0; i < num_rows(); ++i) {
+    data.push_back(operator[](i).to_row());
+  }
+
+  return Matrix(std::move(data));
+}
+
+void Matrix::restrict(const Mask &m) {
+  // can be parallelised easily
+  // #pragma omp parallel for
+  for (size_t i = 0; i < num_rows(); ++i) {
+    data[i].restrict(m);
+  }
+}
+
+int partition_matrix(Matrix &mtx, int low, int high) {
+  const Row &pivot = mtx[high];
+  int p_index = low;
+
+  for (int i = low; i < high; i++) {
+    if (mtx[i].total_order(pivot) <= 0) {
+      std::swap(mtx[i], mtx[p_index]);
+      p_index++;
+    }
+  }
+  std::swap(mtx[high], mtx[p_index]);
+
+  return p_index;
+}
+
+void sort_matrix(Matrix &mtx, int low, int high) {
+  if (low < high) {
+    int p_index = partition_matrix(mtx, low, high);
+    sort_matrix(mtx, low, p_index - 1);
+    sort_matrix(mtx, p_index + 1, high);
+  }
+}
+
+void Matrix::sort() { sort_matrix((Matrix &)(*this), 0, num_rows() - 1); }
+
+void Matrix::remove_duplicates() {
+  auto ip = unique(data.begin(), data.end());
+  data.resize(distance(data.begin(), ip));
+}
+
+//------------------------------------------------------------------------------
+
+bool sat_clause(const RowView &tuple, const Clause &clause) {
+  // does the tuple satisfy the clause?
+  for (int i = 0; i < tuple.size(); ++i) {
+    if (clause[i].sat(tuple[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool sat_formula(const RowView &tuple, const Formula &formula) {
+  // does the tuple satisfy the formula?
+  for (Clause cl : formula) {
+    if (!sat_clause(tuple, cl)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool sat_clause(const Row &tuple, const Clause &clause) {
+  // does the tuple satisfy the clause?
+  for (int i = 0; i < tuple.size(); ++i) {
+    if (clause[i].sat(tuple[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool sat_formula(const Row &tuple, const Formula &formula) {
+  // does the tuple satisfy the formula?
+  for (Clause cl : formula) {
+    if (!sat_clause(tuple, cl)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool sat_clause(const Matrix &matrix, const Clause &clause) {
+  for (size_t i = 0; i < matrix.num_rows(); ++i) {
+    if (!sat_clause(matrix[i], clause)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool sat_formula(const Matrix &matrix, const Formula &formula) {
+  for (size_t i = 0; i < matrix.num_rows(); ++i) {
+    if (!sat_formula(matrix[i], formula)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+vector<string> split(string strg, string delimiters) {
   // splits a string into chunks separated by delimiters (split in perl)
   vector<string> chunks;
 
   for (int i = 0; i < strg.length(); ++i)
-    if (! isprint(strg[i])) {
+    if (!isprint(strg[i])) {
       cerr << "+++ string on input has a non-printable character on position "
-	   << i
-	   << endl;
+           << i << endl;
       exit(2);
     }
 
@@ -98,9 +318,9 @@ vector<string> split (string strg, string delimiters) {
       break;
     strg.erase(0, found);
     found = strg.find_first_of(delimiters);
-    if (found == string::npos) {	// strg can be nonempty
+    if (found == string::npos) { // strg can be nonempty
       if (strg.length() > 0)
-	chunks.push_back(strg);
+        chunks.push_back(strg);
       break;
     }
     chunks.push_back(strg.substr(0, found));
@@ -109,27 +329,26 @@ vector<string> split (string strg, string delimiters) {
   return chunks;
 }
 
-string clause2dimacs (const vector<int> &names, const Clause &clause) {
-  // transforms clause into readable clausal form in DIMACS format to print
+string clause2dimacs(const vector<int> &names, const Clause &clause) {
+  // transforms clause into readable clausal form in (extended) DIMACS format to
+  // print
   string output = "\t";
-  bool plus = false;
   for (int lit = 0; lit < clause.size(); ++lit) {
-      if (clause[lit] != lnone) {
-	if (plus == true)
-	  output += " ";
-	else
-	  plus = true;
-	if (clause[lit] == lneg)
-	  output += '-';
-	output += to_string(offset + names[lit]);
-      }
+    string var = to_string(offset + names[lit]);
+    if (clause[lit].sign & lpos) {
+      output += var + ":" + to_string(clause[lit].pval) + " ";
+    }
+    if (clause[lit].sign & lneg) {
+      output += var + ":" + to_string(clause[lit].nval) + " ";
+    }
   }
-  output += " 0";
+  output += "0";
   return output;
 }
 
-string formula2dimacs (const vector<int> &names, const Formula &formula) {
-  // transforms formula into readable clausal form in DIMACS format to print
+string formula2dimacs(const vector<int> &names, const Formula &formula) {
+  // transforms formula into readable clausal form in 'extended) DIMACS format
+  // to print
   if (formula.empty())
     return " ";
 
@@ -139,53 +358,69 @@ string formula2dimacs (const vector<int> &names, const Formula &formula) {
   return output;
 }
 
-string literal2string (const int &litname, const Literal lit) {
+// TODO:
+// add "boolean" flag / env var, for pretty printing boolean formulas?
+// else switch on lit.sign and print var_name >= pval + var_name <= nval, etc
+string literal2string(const int &litname, const Literal lit) {
   string output;
   if (varswitch) {
-    vector<string> new_names = split(varnames[litname], ":");
-    if (new_names.size() > 1)		// positive or negative
-      output += (lit == lneg)
-	? new_names[nNEGATIVE]
-	: new_names[nPOSITIVE];
-    else				// own name only
-      output += (lit == lneg)
-	? "-" + new_names[nOWN]
-	: new_names[nOWN];
-  } else				// variable without name
-    output += (lit == lneg)
-      ? "-" + varid + to_string(offset + litname)
-      : varid + to_string(offset + litname);
+    // TODO: fix later
+    /* vector<string> new_names = split(varnames[litname], ":");
+    if (new_names.size() > 1) // positive or negative (boolean case)
+      output +=
+          (lit.sign == lneg) ? new_names[nNEGATIVE] : new_names[nPOSITIVE];
+    else // own name only
+      output += new_names[nOWN] + (lit.sign == lneg ? "<=" : ">="); */
+  } else { // variable without name
+    string var_name = varid + to_string(offset + litname);
+    if (lit.sign & lpos) {
+      output += var_name + ">=" + to_string(lit.pval);
+    }
+    if (lit.sign == lboth) {
+      output += " + ";
+    }
+    if (lit.sign & lneg) {
+      output += var_name + "<=" + to_string(lit.nval);
+    }
+  }
   return output;
 }
 
-string rlcl2string (const vector<int> &names, const Clause &clause) {
+string rlcl2string(const vector<int> &names, const Clause &clause) {
   string output;
   bool plus = false;
   for (int lit = 0; lit < clause.size(); ++lit) {
-    if (clause[lit] != lnone) {
+    if (clause[lit].sign != lnone) {
       if (plus == true)
-	output += " + ";
+        output += " + ";
       else
-	plus = true;
+        plus = true;
       output += literal2string(names[lit], clause[lit]);
     }
   }
   return output;
 }
 
-string impl2string (const vector<int> &names, const Clause &clause) {
+string impl2string(const vector<int> &names, const Clause &clause) {
   string output;
   for (int lit = 0; lit < clause.size(); ++lit)
-    if (clause[lit] == lneg)
-      output += literal2string(names[lit], lpos) + " ";
+    if (clause[lit].sign & lneg) {
+      Literal l = clause[lit];
+      l.sign = lpos;
+      l.pval = l.nval + 1;
+      output += literal2string(names[lit], l) + " ";
+    }
   output += "->";
   for (int lit = 0; lit < clause.size(); ++lit)
-    if (clause[lit] == lpos)
-      output += " " + literal2string(names[lit], lpos);
+    if (clause[lit].sign & lpos) {
+      Literal l = clause[lit];
+      l.sign = lpos;
+      output += " " + literal2string(names[lit], l);
+    }
   return output;
 }
 
-string clause2string (const vector<int> &names, const Clause &clause) {
+string clause2string(const vector<int> &names, const Clause &clause) {
   string output = "(";
   if (print == pCLAUSE) {
     output += rlcl2string(names, clause);
@@ -195,20 +430,20 @@ string clause2string (const vector<int> &names, const Clause &clause) {
     int pneg = 0;
     int ppos = 0;
     for (int lit = 0; lit < clause.size(); ++lit)
-      if (clause[lit] == lneg)
-	pneg++;
-      else if (clause[lit] == lpos)
-	ppos++;
-    output += (pneg == 0 || ppos == 0)
-      ? rlcl2string(names, clause)
-      : impl2string(names, clause);
+      if (clause[lit].sign & lneg)
+        pneg++;
+      else if (clause[lit].sign & lpos)
+        ppos++;
+    output += (pneg == 0 || ppos == 0) ? rlcl2string(names, clause)
+                                       : impl2string(names, clause);
   }
   output += ')';
   return output;
 }
 
-string formula2string (const vector<int> &names, const Formula &formula) {
-  // transforms formula into readable clausal, implication or mixed form to print
+string formula2string(const vector<int> &names, const Formula &formula) {
+  // transforms formula into readable clausal, implication or mixed form to
+  // print
   if (formula.empty())
     return " ";
 
@@ -225,56 +460,68 @@ string formula2string (const vector<int> &names, const Formula &formula) {
   return output;
 }
 
-string literal2latex (const int &litname, const Literal lit) {
+string literal2latex(const int &litname, const Literal lit) {
   string output;
   if (varswitch) {
     vector<string> new_names = split(varnames[litname], ":");
-    
-    if (new_names.size() > 1)		// positive or negative
-      output +=
-	lit == lneg && print == pCLAUSE
-	? new_names[nNEGATIVE]
-	: new_names[nPOSITIVE];
-    else				// own name only
-      output += (lit == lneg && print == pCLAUSE
-		 ? "\\neg " + new_names[nOWN]
-		 : new_names[nOWN]);
-  } else				// variable without name
-    output += (lit == lneg && print == pCLAUSE)
-      ? "\\neg " + varid + "_" + to_string(offset + litname)
-      : varid + "_" + to_string(offset + litname);
+    // TODO: fix later
+    /* if (new_names.size() > 1) // positive or negative
+      output += lit == lneg && print == pCLAUSE ? new_names[nNEGATIVE]
+                                                : new_names[nPOSITIVE];
+    else // own name only
+      output += (lit == lneg && print == pCLAUSE ? "\\neg " + new_names[nOWN]
+                                                 : new_names[nOWN]); */
+  } else { // variable without name
+    string var_name = varid + to_string(offset + litname);
+    if (lit.sign & lpos) {
+      output += var_name + "\\geq" + to_string(lit.pval);
+    }
+    if (lit.sign == lboth) {
+      output += " \\lor ";
+    }
+    if (lit.sign & lneg) {
+      output += var_name + "\\leq" + to_string(lit.nval);
+    }
+  }
   return output;
 }
 
-string rlcl2latex (const vector<int> &names, const Clause &clause) {
+string rlcl2latex(const vector<int> &names, const Clause &clause) {
   string output;
   bool lor = false;
   for (int lit = 0; lit < clause.size(); ++lit) {
-    if (clause[lit] != lnone) {
+    if (clause[lit].sign != lnone) {
       if (lor == true)
-	output += " \\lor ";
+        output += " \\lor ";
       else
-	lor = true;
+        lor = true;
       output += literal2latex(names[lit], clause[lit]);
     }
   }
   return output;
 }
 
-string impl2latex (const vector<int> &names, const Clause &clause) {
+string impl2latex(const vector<int> &names, const Clause &clause) {
   string output;
   for (int lit = 0; lit < clause.size(); ++lit)
-    if (clause[lit] == lneg)
-      output += literal2latex(names[lit], lpos) + " ";
+    if (clause[lit].sign & lneg) {
+      Literal l = clause[lit];
+      l.sign = lpos;
+      l.pval = l.nval + 1;
+      output += literal2latex(names[lit], l) + " ";
+    }
   output += "\\to";
   for (int lit = 0; lit < clause.size(); ++lit)
-    if (clause[lit] == lpos)
-      output += " " + literal2latex(names[lit], lpos);
+    if (clause[lit].sign & lpos) {
+      Literal l = clause[lit];
+      l.sign = lpos;
+      output += " " + literal2latex(names[lit], l);
+    }
   return output;
 }
 
-string clause2latex (const vector<int> &names, const Clause &clause) {
-  string output = "(";
+string clause2latex(const vector<int> &names, const Clause &clause) {
+  string output = "\\left(";
   if (print == pCLAUSE) {
     output += rlcl2latex(names, clause);
   } else if (print == pIMPL) {
@@ -283,19 +530,18 @@ string clause2latex (const vector<int> &names, const Clause &clause) {
     int pneg = 0;
     int ppos = 0;
     for (int lit = 0; lit < clause.size(); ++lit)
-      if (clause[lit] == lneg)
-	pneg++;
-      else if (clause[lit] == lpos)
-	ppos++;
-    output += (pneg == 0 || ppos == 0)
-      ? rlcl2latex(names, clause)
-      : impl2latex(names, clause);
+      if (clause[lit].sign & lneg)
+        pneg++;
+      else if (clause[lit].sign & lpos)
+        ppos++;
+    output += (pneg == 0 || ppos == 0) ? rlcl2latex(names, clause)
+                                       : impl2latex(names, clause);
   }
-  output += ')';
+  output += "\\right)";
   return output;
 }
 
-string formula2latex (const vector<int> &names, const Formula &formula) {
+string formula2latex(const vector<int> &names, const Formula &formula) {
   // transforms formula into readable clausal form in LaTeX format to print
   if (formula.empty())
     return " ";
@@ -310,7 +556,7 @@ string formula2latex (const vector<int> &names, const Formula &formula) {
   return output;
 }
 
-void read_formula (vector<int> &names, Formula &formula) {
+void read_formula(vector<int> &names, Formula &formula) {
   // formula read instructions
 
   int nvars;
@@ -332,63 +578,89 @@ void read_formula (vector<int> &names, Formula &formula) {
   for (int i = 0; i < arity; ++i)
     names.push_back(i);
 
-  int lit;
-  Clause clause(arity, lnone);
-  while (cin >> lit)
-    if (lit == 0) {			// end of clause in DIMACS
+  string lit;
+  Clause clause(arity, Literal::none());
+  while (cin >> lit) {
+    if (lit == "0") { // end of clause in DIMACS
       formula.push_back(clause);
       for (int i = 0; i < arity; ++i)
-	clause[i] = lnone;
-    } else if (find(cbegin(validID), cend(validID), abs(lit)) == cend(validID)) {
-      cerr << "+++ " << abs(lit) << " outside allowed variable names" << endl;
-      exit(2);
-    } else
-      clause[abs(lit)-1-offset] = lit < 0 ? lneg : lpos;
+        clause[i] = Literal::none();
+    } else {
+      vector<string> parts = split(lit, ":");
+      if (parts.size() == 0 || parts.size() > 2) {
+        cerr << "+++ " << quoted(lit)
+             << " is not a valid Extended DIMACS literal" << endl;
+        exit(2);
+      }
+      try {
+        long long var = stoll(parts[0]);
+
+        if (find(cbegin(validID), cend(validID), abs(var)) == cend(validID)) {
+          cerr << "+++ " << abs(var) << " outside allowed variable names"
+               << endl;
+          exit(2);
+        }
+
+        uintmax_t val = parts.size() == 2 ? stoul(parts[1]) : (var < 0 ? 0 : 1);
+        if (val > (uintmax_t)DCARD) {
+          throw out_of_range(parts[1]);
+        }
+
+        Literal l = clause.at(abs(var) - 1 - offset);
+        if (var < 0) {
+          l.sign = Sign(l.sign | lneg);
+          l.nval = integer(val);
+        } else {
+          l.sign = Sign(l.sign | lpos);
+          l.pval = integer(val);
+        }
+        clause.at(abs(var) - 1 - offset) = l;
+
+      } catch (invalid_argument const &ex) {
+        cerr << "+++ The Extended DIMACS literal " << quoted(lit)
+             << " contains invalid integer values: " << ex.what() << endl;
+        exit(2);
+      } catch (out_of_range const &ex) {
+        cerr << "+++ The Extended DIMACS literal " << quoted(lit)
+             << " contains an integer value that falls out of range: "
+             << ex.what() << endl;
+        exit(2);
+      }
+    }
+  }
 }
 
-ostream& operator<< (ostream &output, const Row &row) {
+ostream &operator<<(ostream &output, const Row &row) {
   // overloading ostream to print a row
   // transforms a tuple (row) to a printable form
   // for (bool bit : row)
   for (int i = 0; i < row.size(); ++i)
     // output << to_string(bit); // bit == true ? 1 : 0;
     // output << to_string(row[i]);
-    output << row[i];
+    output << row[i] << " ";
   return output;
 }
 
-ostream& operator<< (ostream &output, const Matrix &M) {
+ostream &operator<<(ostream &output, const RowView &row) {
+  // overloading ostream to print a row
+  // transforms a tuple (row) to a printable form
+  // for (bool bit : row)
+  for (int i = 0; i < row.size(); ++i)
+    // output << to_string(bit); // bit == true ? 1 : 0;
+    // output << to_string(row[i]);
+    output << row[i] << " ";
+  return output;
+}
+
+ostream &operator<<(ostream &output, const Matrix &M) {
   // overloading ostream to print a matrix
   // transforms a matrix to a printable form
-  for (Row row : M)
-    output << "\t" << row << "\n";
+  for (size_t i = 0; i < M.num_rows(); ++i) {
+    output << "\t";
+    for (size_t j = 0; j < M.num_cols(); ++j) {
+      output << M[i][j] << " ";
+    }
+    output << "\n";
+  }
   return output;
-}
-
-void push_front (Row &row1, const Row &row2) {
-  Row newrow(row1.size()+row2.size(), row2.to_ulong());
-  row1.resize(newrow.size());
-  row1 <<= row2.size();
-  newrow |= row1;
-  row1 = newrow;
-}
-
-void push_front (Row &row, const bool b) {
-  Row newrow(row.size()+1, b);
-  row.resize(newrow.size());
-  row <<= 1;
-  row |= newrow;
-}
-
-bool front (const Row &row) {
-  return row[0];
-}
-
-bool back (const Row &row) {
-  return row[row.size()-1];
-}
-
-void pop_front (Row &row) {
-  row >>= 1;
-  row.resize(row.size()-1);
 }

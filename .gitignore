@@ -1,0 +1,14 @@
+compile_flags.txt
+mcp-check
+mcp-chk2tst
+mcp-cnf
+mcp-guess
+mcp-hybrid
+mcp-mpi
+mcp-predict
+mcp-pthread
+mcp-seq
+mcp-sparse
+mcp-split
+mcp-trans
+mcp-uniq

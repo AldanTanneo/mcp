@@ -26,17 +26,18 @@
  *                                                                        *
  **************************************************************************/
 
-#include <thread>
+#include "mcp-posix.hpp"
 #include "mcp-common.hpp"
 #include "mcp-matrix+formula.hpp"
 #include "mcp-parallel.hpp"
-#include "mcp-posix.hpp"
+#include <thread>
 
 using namespace std;
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-void OGchunk (const Row &a, const Matrix &M, Matrix &result, int left, int right) {
+void OGchunk(const Row &a, const Matrix &M, Matrix &result, int left,
+             int right) {
   // selects tuples (rows) in M[left..right-1] above the tuple a
   // usefull for distribution among threads
   for (int i = left; i < right; ++i)
@@ -44,7 +45,7 @@ void OGchunk (const Row &a, const Matrix &M, Matrix &result, int left, int right
       result.push_back(M[i]);
 }
 
-Matrix gather (const Matrix &A, const Matrix &B) {
+Matrix gather(const Matrix &A, const Matrix &B) {
   if (A.empty())
     return B;
   if (B.empty())
@@ -55,7 +56,7 @@ Matrix gather (const Matrix &A, const Matrix &B) {
   return C;
 }
 
-Matrix ObsGeq (const Row &a, const Matrix &M) {
+Matrix ObsGeq(const Row &a, const Matrix &M) {
   // selects tuples (rows) above the tuple a
   Matrix P;
   const int msize = M.size();
@@ -64,18 +65,18 @@ Matrix ObsGeq (const Row &a, const Matrix &M) {
     Matrix *chunk = new Matrix[nchunks];
     vector<thread> chunk_threads;
     for (int i = 0; i < nchunks; ++i)
-      chunk_threads.push_back(thread(OGchunk,
-				     ref(a), ref(M), ref(chunk[i]),
-				     i*chunkLIMIT, min((i+1)*chunkLIMIT, msize)));
+      chunk_threads.push_back(thread(OGchunk, ref(a), ref(M), ref(chunk[i]),
+                                     i * chunkLIMIT,
+                                     min((i + 1) * chunkLIMIT, msize)));
     for (auto &ct : chunk_threads)
       ct.join();
     for (int i = 0; i < nchunks; ++i)
       P = gather(P, chunk[i]);
-    delete [] chunk;
+    delete[] chunk;
   } else
     for (Row row : M)
       if (row >= a)
-	P.push_back(row);
+        P.push_back(row);
   return P;
 }
 
