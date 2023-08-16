@@ -30,8 +30,8 @@
 
 #include "mcp-matrix+formula.hpp"
 #include <deque>
-#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // #define GLOBAL_VERSION "1.04-c++-"
@@ -46,11 +46,12 @@ extern bool debug;
 // extern vector<string> varnames;
 // enum NAME {nOWN = 0, nPOSITIVE = 1, nNEGATIVE = 2};
 
-extern std::map<Row, int>
-    pred; // predecessor function for Zanuttini's algorithm
-extern std::map<Row, int> succ; // successor function for Zanuttini's algorithm
-extern std::map<Row, std::vector<int>>
-    sim; // sim table for Zanuttini's algorithm
+// predecessor function for Zanuttini's algorithm
+extern std::unordered_map<Row, size_t> pred;
+// successor function for Zanuttini's algorithm
+extern std::unordered_map<Row, size_t> succ;
+// sim table for Zanuttini's algorithm
+extern std::unordered_map<Row, std::vector<size_t>> sim;
 
 // enum Action    {aONE    = 0, aALL    = 1, aNOSECT      = 2};
 enum Closure : char {
@@ -85,6 +86,7 @@ extern const std::string STDOUT;
 extern Closure closure;
 extern Cooking cooking;
 extern Direction direction;
+extern unsigned int random_seed;
 // extern Print print;
 extern bool setcover;
 extern Strategy strategy;
@@ -119,7 +121,7 @@ extern const std::string arch_strg[];
 //--------------------------------------------------------------------------------------------------
 
 void read_arg(int argc, char *argv[]);
-int hamming_distance(const Row &u, const Row &v);
+size_t hamming_distance(const Row &u, const Row &v);
 
 // ostream& operator<< (ostream &output, const Row &row);
 // ostream& operator<< (ostream &output, const Matrix &M);
@@ -128,14 +130,15 @@ bool InHornClosure(const RowView &a, const MatrixMask &M);
 bool InHornClosure(const Row &a, const Matrix &M);
 
 bool inadmissible(const Matrix &T, const Matrix &F);
+bool inadmissible(const MatrixMask &T, const MatrixMask &F);
 
 int hamming_weight(const Row &row);
 
-std::vector<bool> minsect(const Matrix &T, const Matrix &F);
+Mask minsect(const Matrix &T, const Matrix &F);
 
 bool satisfied_by(const Clause &clause, const Matrix &T);
 
-Matrix restrict(const std::vector<bool> &sect, const Matrix &A);
+void restrict(const std::vector<bool> &sect, Matrix &A);
 
 Matrix HornClosure(const Matrix &M);
 
@@ -153,8 +156,8 @@ Formula learnHornExact(const Matrix &T);
 Formula learnCNFlarge(const Matrix &F);
 Formula learnCNFexact(const Matrix &T);
 void write_formula(const std::string &suffix1, const std::string &suffix2,
-                   const std::vector<int> &names, const Formula &formula);
-void write_formula(const std::string &suffix, const std::vector<int> &names,
+                   const std::vector<size_t> &names, const Formula &formula);
+void write_formula(const std::string &suffix, const std::vector<size_t> &names,
                    const Formula &formula);
 
 void polswap_formula(Formula &formula);

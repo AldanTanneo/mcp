@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "bucket.hpp"
+#include "mcp-matrix+formula.hpp"
 
 namespace mesh {
 // ordinal directions
@@ -77,7 +78,7 @@ public:
 
 private:
   std::shared_ptr<RowNode> root;
-  void build(const std::vector<bucket::Point> &, const int, const int);
+  void build(const std::vector<bucket::Point> &, const size_t, const size_t);
 };
 typedef std::vector<std::vector<RowTree>> Mesh;
 typedef std::vector<std::unordered_set<integer>> Strip;
@@ -86,8 +87,8 @@ bucket::Clause isolation(const bucket::Point &p,
                          const std::array<size_t, 2> &xy,
                          const Direction quadrant);
 
-void init(Mesh &);
-void init(Strip &);
+void init(Mesh &, size_t);
+void init(Strip &, size_t);
 
 } // namespace mesh
 

@@ -1,4 +1,6 @@
 compile_flags.txt
+**.d
+**.o
 mcp-check
 mcp-chk2tst
 mcp-cnf

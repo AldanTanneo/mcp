@@ -25,8 +25,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <deque>
 #include <functional>
+#include <iostream>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -47,7 +49,7 @@ extern const std::string display_strg[];
 // domain value type
 using integer = uint16_t;
 // maximum value of the domain (cardinality - 1)
-constexpr integer DCARD = std::numeric_limits<integer>::max();
+extern integer DMAX;
 
 class RowView;
 
@@ -74,15 +76,16 @@ public:
   Row &operator=(Row &&) = default;
   // explicitely clone the row
   inline Row clone() const & { return Row(container(data)); }
+  inline Row to_row() const & { return clone(); }
 
   // get the size of the row
-  constexpr size_t size() const noexcept { return data.size(); }
+  inline size_t size() const & noexcept { return data.size(); }
   // constant index operation
-  constexpr const integer &operator[](size_t index) const & noexcept {
+  inline const integer &operator[](size_t index) const & noexcept {
     return data[index];
   }
   // mutable index operation
-  constexpr integer &operator[](size_t index) & noexcept { return data[index]; }
+  inline integer &operator[](size_t index) & noexcept { return data[index]; }
   // add a value to the end of the row
   inline void push_back(integer value) & { data.push_back(value); }
   // preallocate enough memory for the specified number of values
@@ -133,29 +136,35 @@ private:
 
 public:
   // empty matrix
-  explicit Matrix() = default;
+  Matrix() = default;
   // constructs a matrix from rvalue data
-  inline explicit Matrix(container &&data) : data(data) {}
+  inline Matrix(container &&data) : data(std::move(data)) {}
 
   Matrix(const Matrix &) = delete;
   Matrix(Matrix &&) = default;
   Matrix &operator=(Matrix &&) = default;
   // explicitely clone the matrix
-  inline Matrix clone() const & { return Matrix(container(data)); }
+  inline Matrix clone() const & {
+    Matrix res;
+    res.reserve(num_rows());
+    for (size_t i = 0; i < num_rows(); ++i)
+      res.add_row(operator[](i).clone());
+    return res;
+  }
 
   // checks wether the matrix is empty
-  constexpr bool empty() const noexcept { return data.empty(); }
+  inline bool empty() const noexcept { return data.empty(); }
   // reserves space for the rows
   inline void reserve(size_t size) { data.reserve(size); }
   // returns the number of rows
-  constexpr size_t num_rows() const noexcept { return data.size(); }
+  inline size_t num_rows() const noexcept { return data.size(); }
   // returns the number of columns
-  constexpr size_t num_cols() const noexcept {
+  inline size_t num_cols() const noexcept {
     return data.size() > 0 ? data[0].size() : 0;
   }
 
   // equivalent to M[row][col]
-  constexpr integer get(size_t row, size_t col) const noexcept {
+  inline integer get(size_t row, size_t col) const noexcept {
     return data[row][col];
   }
   // returns a const view into a row
@@ -165,7 +174,7 @@ public:
   inline Row &operator[](size_t index) { return data[index]; }
 
   // add a new row to the matrix
-  inline void add_row(Row new_row) { data.push_back(new_row); }
+  inline void add_row(Row &&new_row) & { data.push_back(std::move(new_row)); }
 
   // deletes a row without preserving row order
   void delete_row(size_t index);
@@ -202,7 +211,9 @@ public:
   inline integer operator[](size_t index) const { return data[cols[index]]; }
 
   bool operator>=(const RowView &) const;
+  bool operator>=(const Row &) const;
   bool operator>(const RowView &) const;
+  bool operator>(const Row &) const;
   bool operator==(const RowView &) const;
   bool operator==(const Row &) const;
 
@@ -223,6 +234,12 @@ private:
 public:
   inline explicit MatrixMask(const Matrix &mat, const Mask &column_mask)
       : cols(std::vector<size_t>()), matrix(mat) {
+    if (column_mask.size() != mat.num_cols()) {
+      std::cerr
+          << "/!\\ mask size and number of columns are different, aborting!"
+          << std::endl;
+      exit(2);
+    }
     for (size_t i = 0; i < column_mask.size(); ++i) {
       if (column_mask[i]) {
         cols.push_back(i);
@@ -236,34 +253,33 @@ public:
       cols.push_back(i);
     }
   }
-  inline explicit MatrixMask(const MatrixMask &other)
-      : cols(other.cols), matrix(other.matrix) {}
-
-  inline MatrixMask &operator=(const MatrixMask &&other) {
-    MatrixMask mat(other);
-    std::swap(mat, *this);
-    return (MatrixMask &)(*this);
-  }
+  MatrixMask(MatrixMask &other) = default;
+  MatrixMask &operator=(MatrixMask &&other) = default;
 
   // hides a column in the mask without erasing it from the original matrix
   inline void hide_column(size_t index) {
-    cols.erase(std::begin(cols) + index);
+    auto pos = std::find(cols.begin(), cols.end(), index);
+    if (pos == cols.end()) {
+      std::cerr << "could not find coordinate" << std::endl;
+      return;
+    }
+    cols.erase(pos);
   }
 
   // checks if the underlying matrix is empty
-  constexpr bool empty() const { return matrix.get().empty(); }
+  inline bool empty() const { return matrix.get().empty(); }
   // returns the number of rows
-  constexpr size_t num_rows() const { return matrix.get().num_rows(); }
+  inline size_t num_rows() const { return matrix.get().num_rows(); }
   // returns the number of columns
-  constexpr size_t num_cols() const { return cols.size(); }
+  inline size_t num_cols() const { return cols.size(); }
 
   // equivalent to M[row][col], with the mask applied
-  constexpr integer get(size_t row, size_t col) const {
-    return matrix.get().data[row][cols[col]];
+  inline integer get(size_t row, size_t col) const {
+    return matrix.get()[row][cols[col]];
   }
   // returns a const view into a masked row
   inline RowView operator[](size_t index) const {
-    return RowView(matrix.get().data[index], cols);
+    return RowView(matrix.get()[index], cols);
   }
 
   // copies the masked matrix to a new one.
@@ -300,17 +316,17 @@ struct Literal {
   }
 
   // inverts the literal.
-  // `x <= d` becomes `x >= d + 1`.
-  // `x >= d` becomes `x <= d - 1`.
+  // `x <= d` becomes `x >= n - d`.
+  // `x >= d` becomes `x <= n - d`.
   inline Literal swap() const noexcept {
     Literal res;
-    if (sign & lneg && nval < DCARD) {
+    if (sign & lneg && nval < DMAX) {
       res.sign = lpos;
-      res.pval = nval + 1;
+      res.pval = DMAX - nval;
     }
     if (sign & lpos && pval > 0) {
       res.sign = Sign(res.sign | lneg);
-      res.nval = pval - 1;
+      res.nval = DMAX - pval;
     }
     return res;
   }
@@ -367,13 +383,13 @@ enum NAME : char { nOWN = 0, nPOSITIVE = 1, nNEGATIVE = 2 };
 
 extern const int SENTINEL;
 extern const double RSNTNL;
-extern const int MTXLIMIT;
+extern const size_t MTXLIMIT;
 
 extern Action action;
 extern std::string selected;
 extern std::string suffix;
-extern int arity;
-extern int offset;
+extern size_t arity;
+extern size_t offset;
 extern Print print;
 extern Display display;
 
@@ -384,17 +400,17 @@ void read_matrix(Group_of_Matrix &matrix);
 // print a matrix
 void print_matrix(const Group_of_Matrix &matrix);
 // read a formula from its Extended DIMACS representation
-void read_formula(std::vector<int> &names, Formula &formula);
+void read_formula(std::vector<size_t> &names, Formula &formula);
 // split a string along the specified delimiters
 std::vector<std::string> split(std::string strg, std::string delimiters);
 // get the Extended DIMACS representation of a formula
-std::string formula2dimacs(const std::vector<int> &names,
+std::string formula2dimacs(const std::vector<size_t> &names,
                            const Formula &formula);
 // get the string representation of a formula
-std::string formula2string(const std::vector<int> &names,
+std::string formula2string(const std::vector<size_t> &names,
                            const Formula &formula);
 // get the latex representation of a formula
-std::string formula2latex(const std::vector<int> &names,
+std::string formula2latex(const std::vector<size_t> &names,
                           const Formula &formula);
 // checks that a row satisfies a clause
 bool sat_clause(const RowView &tuple, const Clause &clause);
@@ -417,6 +433,8 @@ std::ostream &operator<<(std::ostream &output, const Row &row);
 std::ostream &operator<<(std::ostream &output, const RowView &row);
 // display a matrix
 std::ostream &operator<<(std::ostream &output, const Matrix &M);
+// display a masked matrix
+std::ostream &operator<<(std::ostream &output, const MatrixMask &M);
 
 // combine two hash values
 constexpr size_t hash_combine(size_t a, size_t b) {
@@ -450,3 +468,37 @@ public:
     return res;
   }
 };
+
+template <> class std::hash<Literal> {
+public:
+  size_t operator()(const Literal &l) const noexcept {
+    size_t res = std::hash<Sign>{}(l.sign);
+    if (l.sign & lneg) {
+      res = hash_combine(res, std::hash<size_t>{}(l.nval));
+    }
+    if (l.sign & lpos) {
+      res = hash_combine(res, std::hash<size_t>{}(l.pval));
+    }
+    return res;
+  }
+};
+
+template <> class std::hash<Clause> {
+public:
+  size_t operator()(const Clause &c) const noexcept {
+    size_t res = 0;
+    for (auto l : c) {
+      res = hash_combine(res, std::hash<Literal>{}(l));
+    }
+    return res;
+  }
+};
+
+inline bool operator==(const Clause &a, const Clause &b) {
+  if (a.size() != b.size())
+    return false;
+  size_t i = 0;
+  while (i < a.size() && a[i] == b[i])
+    ++i;
+  return i == a.size();
+}

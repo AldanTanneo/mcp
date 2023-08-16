@@ -41,7 +41,7 @@ using namespace std;
 string version = GLOBAL_VERSION;
 const int SENTINEL = -1;
 const double RSNTNL = -1.0;
-const int MTXLIMIT = 4000;
+const size_t MTXLIMIT = 4000;
 
 const string print_strg[] = {"void", "clause", "implication", "mixed",
                              "DIMACS"};
@@ -49,10 +49,7 @@ const string display_strg[] = {"undefined", "hide", "peek", "section", "show"};
 const string sign_string[] = {/*lnone*/ "?",
                               /*lneg*/ "<=", /*lpos*/ ">=", /*lboth*/ "<=>"};
 
-// const string neg[2]  = {"-", "\\neg "};
-// const string disj[2] = {" + ", " \\lor "};
-// const string conj[2] = {"* ", "\\land "};
-
+integer DMAX = 0;
 Group_of_Matrix group_of_matrix;
 vector<string> grps;
 
@@ -65,8 +62,8 @@ string selected = "";
 Print print = pVOID;
 Display display = yUNDEF;
 string suffix;
-int arity = 0;
-int offset = 0;
+size_t arity = 0;
+size_t offset = 0;
 
 //------------------------------------------------------------------------------
 
@@ -142,7 +139,29 @@ bool RowView::operator>=(const RowView &rhs) const {
   return true;
 }
 
+bool RowView::operator>=(const Row &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] > operator[](i))
+      return false;
+  }
+  return true;
+}
+
 bool RowView::operator>(const RowView &rhs) const {
+  if (rhs.size() != size())
+    return false;
+
+  for (size_t i = 0; i < rhs.size(); ++i) {
+    if (rhs[i] >= operator[](i))
+      return false;
+  }
+  return true;
+}
+
+bool RowView::operator>(const Row &rhs) const {
   if (rhs.size() != size())
     return false;
 
@@ -176,8 +195,8 @@ bool RowView::operator==(const Row &rhs) const {
 }
 
 Row RowView::to_row() const {
-  Row res(size());
-  for (int i = 0; i < size(); ++i) {
+  Row res(cols.size());
+  for (size_t i = 0; i < cols.size(); ++i) {
     res[i] = data[cols[i]];
   }
   return res;
@@ -211,11 +230,11 @@ void Matrix::restrict(const Mask &m) {
   }
 }
 
-int partition_matrix(Matrix &mtx, int low, int high) {
+size_t partition_matrix(Matrix &mtx, size_t low, size_t high) {
   const Row &pivot = mtx[high];
-  int p_index = low;
+  size_t p_index = low;
 
-  for (int i = low; i < high; i++) {
+  for (size_t i = low; i < high; i++) {
     if (mtx[i].total_order(pivot) <= 0) {
       std::swap(mtx[i], mtx[p_index]);
       p_index++;
@@ -226,9 +245,9 @@ int partition_matrix(Matrix &mtx, int low, int high) {
   return p_index;
 }
 
-void sort_matrix(Matrix &mtx, int low, int high) {
+void sort_matrix(Matrix &mtx, size_t low, size_t high) {
   if (low < high) {
-    int p_index = partition_matrix(mtx, low, high);
+    size_t p_index = partition_matrix(mtx, low, high);
     sort_matrix(mtx, low, p_index - 1);
     sort_matrix(mtx, p_index + 1, high);
   }
@@ -238,14 +257,14 @@ void Matrix::sort() { sort_matrix((Matrix &)(*this), 0, num_rows() - 1); }
 
 void Matrix::remove_duplicates() {
   auto ip = unique(data.begin(), data.end());
-  data.resize(distance(data.begin(), ip));
+  data.resize(size_t(distance(data.begin(), ip)));
 }
 
 //------------------------------------------------------------------------------
 
 bool sat_clause(const RowView &tuple, const Clause &clause) {
   // does the tuple satisfy the clause?
-  for (int i = 0; i < tuple.size(); ++i) {
+  for (size_t i = 0; i < tuple.size(); ++i) {
     if (clause[i].sat(tuple[i])) {
       return true;
     }
@@ -265,7 +284,7 @@ bool sat_formula(const RowView &tuple, const Formula &formula) {
 
 bool sat_clause(const Row &tuple, const Clause &clause) {
   // does the tuple satisfy the clause?
-  for (int i = 0; i < tuple.size(); ++i) {
+  for (size_t i = 0; i < tuple.size(); ++i) {
     if (clause[i].sat(tuple[i])) {
       return true;
     }
@@ -305,7 +324,7 @@ vector<string> split(string strg, string delimiters) {
   // splits a string into chunks separated by delimiters (split in perl)
   vector<string> chunks;
 
-  for (int i = 0; i < strg.length(); ++i)
+  for (size_t i = 0; i < strg.length(); ++i)
     if (!isprint(strg[i])) {
       cerr << "+++ string on input has a non-printable character on position "
            << i << endl;
@@ -329,11 +348,11 @@ vector<string> split(string strg, string delimiters) {
   return chunks;
 }
 
-string clause2dimacs(const vector<int> &names, const Clause &clause) {
+string clause2dimacs(const vector<size_t> &names, const Clause &clause) {
   // transforms clause into readable clausal form in (extended) DIMACS format to
   // print
   string output = "\t";
-  for (int lit = 0; lit < clause.size(); ++lit) {
+  for (size_t lit = 0; lit < clause.size(); ++lit) {
     string var = to_string(offset + names[lit]);
     if (clause[lit].sign & lpos) {
       output += var + ":" + to_string(clause[lit].pval) + " ";
@@ -346,7 +365,7 @@ string clause2dimacs(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string formula2dimacs(const vector<int> &names, const Formula &formula) {
+string formula2dimacs(const vector<size_t> &names, const Formula &formula) {
   // transforms formula into readable clausal form in 'extended) DIMACS format
   // to print
   if (formula.empty())
@@ -361,7 +380,7 @@ string formula2dimacs(const vector<int> &names, const Formula &formula) {
 // TODO:
 // add "boolean" flag / env var, for pretty printing boolean formulas?
 // else switch on lit.sign and print var_name >= pval + var_name <= nval, etc
-string literal2string(const int &litname, const Literal lit) {
+string literal2string(const size_t &litname, const Literal lit) {
   string output;
   if (varswitch) {
     // TODO: fix later
@@ -386,10 +405,10 @@ string literal2string(const int &litname, const Literal lit) {
   return output;
 }
 
-string rlcl2string(const vector<int> &names, const Clause &clause) {
+string rlcl2string(const vector<size_t> &names, const Clause &clause) {
   string output;
   bool plus = false;
-  for (int lit = 0; lit < clause.size(); ++lit) {
+  for (size_t lit = 0; lit < clause.size(); ++lit) {
     if (clause[lit].sign != lnone) {
       if (plus == true)
         output += " + ";
@@ -401,9 +420,9 @@ string rlcl2string(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string impl2string(const vector<int> &names, const Clause &clause) {
+string impl2string(const vector<size_t> &names, const Clause &clause) {
   string output;
-  for (int lit = 0; lit < clause.size(); ++lit)
+  for (size_t lit = 0; lit < clause.size(); ++lit)
     if (clause[lit].sign & lneg) {
       Literal l = clause[lit];
       l.sign = lpos;
@@ -411,7 +430,7 @@ string impl2string(const vector<int> &names, const Clause &clause) {
       output += literal2string(names[lit], l) + " ";
     }
   output += "->";
-  for (int lit = 0; lit < clause.size(); ++lit)
+  for (size_t lit = 0; lit < clause.size(); ++lit)
     if (clause[lit].sign & lpos) {
       Literal l = clause[lit];
       l.sign = lpos;
@@ -420,7 +439,7 @@ string impl2string(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string clause2string(const vector<int> &names, const Clause &clause) {
+string clause2string(const vector<size_t> &names, const Clause &clause) {
   string output = "(";
   if (print == pCLAUSE) {
     output += rlcl2string(names, clause);
@@ -429,7 +448,7 @@ string clause2string(const vector<int> &names, const Clause &clause) {
   } else if (print == pMIX) {
     int pneg = 0;
     int ppos = 0;
-    for (int lit = 0; lit < clause.size(); ++lit)
+    for (size_t lit = 0; lit < clause.size(); ++lit)
       if (clause[lit].sign & lneg)
         pneg++;
       else if (clause[lit].sign & lpos)
@@ -441,7 +460,7 @@ string clause2string(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string formula2string(const vector<int> &names, const Formula &formula) {
+string formula2string(const vector<size_t> &names, const Formula &formula) {
   // transforms formula into readable clausal, implication or mixed form to
   // print
   if (formula.empty())
@@ -460,7 +479,7 @@ string formula2string(const vector<int> &names, const Formula &formula) {
   return output;
 }
 
-string literal2latex(const int &litname, const Literal lit) {
+string literal2latex(const size_t &litname, const Literal lit) {
   string output;
   if (varswitch) {
     vector<string> new_names = split(varnames[litname], ":");
@@ -486,10 +505,10 @@ string literal2latex(const int &litname, const Literal lit) {
   return output;
 }
 
-string rlcl2latex(const vector<int> &names, const Clause &clause) {
+string rlcl2latex(const vector<size_t> &names, const Clause &clause) {
   string output;
   bool lor = false;
-  for (int lit = 0; lit < clause.size(); ++lit) {
+  for (size_t lit = 0; lit < clause.size(); ++lit) {
     if (clause[lit].sign != lnone) {
       if (lor == true)
         output += " \\lor ";
@@ -501,9 +520,9 @@ string rlcl2latex(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string impl2latex(const vector<int> &names, const Clause &clause) {
+string impl2latex(const vector<size_t> &names, const Clause &clause) {
   string output;
-  for (int lit = 0; lit < clause.size(); ++lit)
+  for (size_t lit = 0; lit < clause.size(); ++lit)
     if (clause[lit].sign & lneg) {
       Literal l = clause[lit];
       l.sign = lpos;
@@ -511,7 +530,7 @@ string impl2latex(const vector<int> &names, const Clause &clause) {
       output += literal2latex(names[lit], l) + " ";
     }
   output += "\\to";
-  for (int lit = 0; lit < clause.size(); ++lit)
+  for (size_t lit = 0; lit < clause.size(); ++lit)
     if (clause[lit].sign & lpos) {
       Literal l = clause[lit];
       l.sign = lpos;
@@ -520,7 +539,7 @@ string impl2latex(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string clause2latex(const vector<int> &names, const Clause &clause) {
+string clause2latex(const vector<size_t> &names, const Clause &clause) {
   string output = "\\left(";
   if (print == pCLAUSE) {
     output += rlcl2latex(names, clause);
@@ -529,7 +548,7 @@ string clause2latex(const vector<int> &names, const Clause &clause) {
   } else if (print == pMIX) {
     int pneg = 0;
     int ppos = 0;
-    for (int lit = 0; lit < clause.size(); ++lit)
+    for (size_t lit = 0; lit < clause.size(); ++lit)
       if (clause[lit].sign & lneg)
         pneg++;
       else if (clause[lit].sign & lpos)
@@ -541,7 +560,7 @@ string clause2latex(const vector<int> &names, const Clause &clause) {
   return output;
 }
 
-string formula2latex(const vector<int> &names, const Formula &formula) {
+string formula2latex(const vector<size_t> &names, const Formula &formula) {
   // transforms formula into readable clausal form in LaTeX format to print
   if (formula.empty())
     return " ";
@@ -556,7 +575,7 @@ string formula2latex(const vector<int> &names, const Formula &formula) {
   return output;
 }
 
-void read_formula(vector<int> &names, Formula &formula) {
+void read_formula(vector<size_t> &names, Formula &formula) {
   // formula read instructions
 
   int nvars;
@@ -575,7 +594,7 @@ void read_formula(vector<int> &names, Formula &formula) {
     validID.push_back(dummy);
   }
 
-  for (int i = 0; i < arity; ++i)
+  for (size_t i = 0; i < arity; ++i)
     names.push_back(i);
 
   string lit;
@@ -583,7 +602,7 @@ void read_formula(vector<int> &names, Formula &formula) {
   while (cin >> lit) {
     if (lit == "0") { // end of clause in DIMACS
       formula.push_back(clause);
-      for (int i = 0; i < arity; ++i)
+      for (size_t i = 0; i < arity; ++i)
         clause[i] = Literal::none();
     } else {
       vector<string> parts = split(lit, ":");
@@ -602,11 +621,11 @@ void read_formula(vector<int> &names, Formula &formula) {
         }
 
         uintmax_t val = parts.size() == 2 ? stoul(parts[1]) : (var < 0 ? 0 : 1);
-        if (val > (uintmax_t)DCARD) {
+        if (val > (uintmax_t)DMAX) {
           throw out_of_range(parts[1]);
         }
 
-        Literal l = clause.at(abs(var) - 1 - offset);
+        Literal l = clause.at(size_t(abs(var)) - 1 - offset);
         if (var < 0) {
           l.sign = Sign(l.sign | lneg);
           l.nval = integer(val);
@@ -614,7 +633,7 @@ void read_formula(vector<int> &names, Formula &formula) {
           l.sign = Sign(l.sign | lpos);
           l.pval = integer(val);
         }
-        clause.at(abs(var) - 1 - offset) = l;
+        clause.at(size_t(abs(var)) - 1 - offset) = l;
 
       } catch (invalid_argument const &ex) {
         cerr << "+++ The Extended DIMACS literal " << quoted(lit)
@@ -634,7 +653,7 @@ ostream &operator<<(ostream &output, const Row &row) {
   // overloading ostream to print a row
   // transforms a tuple (row) to a printable form
   // for (bool bit : row)
-  for (int i = 0; i < row.size(); ++i)
+  for (size_t i = 0; i < row.size(); ++i)
     // output << to_string(bit); // bit == true ? 1 : 0;
     // output << to_string(row[i]);
     output << row[i] << " ";
@@ -645,22 +664,34 @@ ostream &operator<<(ostream &output, const RowView &row) {
   // overloading ostream to print a row
   // transforms a tuple (row) to a printable form
   // for (bool bit : row)
-  for (int i = 0; i < row.size(); ++i)
+  for (size_t i = 0; i < row.size(); ++i)
     // output << to_string(bit); // bit == true ? 1 : 0;
     // output << to_string(row[i]);
     output << row[i] << " ";
   return output;
 }
 
-ostream &operator<<(ostream &output, const Matrix &M) {
+template <typename M>
+ostream &internal_matrix_display(ostream &output, const M &m) {
   // overloading ostream to print a matrix
   // transforms a matrix to a printable form
-  for (size_t i = 0; i < M.num_rows(); ++i) {
+  const size_t n = m.num_rows();
+  const size_t max_to_show = (display == yPEEK && n >= 5) ? 5 : n;
+  for (size_t i = 0; i < max_to_show; ++i) {
     output << "\t";
-    for (size_t j = 0; j < M.num_cols(); ++j) {
-      output << M[i][j] << " ";
+    for (size_t j = 0; j < m.num_cols(); ++j) {
+      output << m[i][j] << " ";
     }
     output << "\n";
   }
+  if (display == yPEEK && n >= 5)
+    output << "\t...\n" << endl;
   return output;
+}
+
+ostream &operator<<(ostream &output, const Matrix &M) {
+  return internal_matrix_display<Matrix>(output, M);
+}
+ostream &operator<<(ostream &output, const MatrixMask &M) {
+  return internal_matrix_display<MatrixMask>(output, M);
 }

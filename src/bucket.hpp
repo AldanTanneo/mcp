@@ -1,11 +1,11 @@
 #pragma once
 
-#include "mcp-common.hpp"
-#include "mcp-matrix+formula.hpp"
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
+
+#include "mcp-matrix+formula.hpp"
 
 namespace bucket {
 
@@ -44,7 +44,7 @@ constexpr bool valid(const Clause &c) noexcept {
 typedef std::unordered_map<Pattern, std::set<Point>> Bucket;
 
 void insert(const Clause &, Bucket &);
-Formula get_formula(const Bucket &);
+Formula get_formula(const Bucket &, size_t arity);
 bool sat_bucket(const Row &, const Bucket &);
 void print_bucket(const Bucket &);
 

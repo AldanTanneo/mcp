@@ -19,7 +19,7 @@ bucket::Clause isolation(const Point &p, const std::array<size_t, 2> &xy,
   bucket::Clause c = empty_clause;
   switch (quadrant) {
   case NW:
-    if (p[X] < DCARD) {
+    if (p[X] < DMAX) {
       c.lsign = lpos;
       c.lcoord = xy[X];
       c.lval = p[X] + 1;
@@ -48,19 +48,19 @@ bucket::Clause isolation(const Point &p, const std::array<size_t, 2> &xy,
       c.lcoord = xy[X];
       c.lval = p[X] - 1;
     }
-    if (p[Y] < DCARD) {
+    if (p[Y] < DMAX) {
       c.rsign = lpos;
       c.rcoord = xy[Y];
       c.rval = p[Y] + 1;
     }
     break;
   case SW:
-    if (p[X] < DCARD) {
+    if (p[X] < DMAX) {
       c.lsign = lpos;
       c.lcoord = xy[X];
       c.lval = p[X] + 1;
     }
-    if (p[Y] < DCARD) {
+    if (p[Y] < DMAX) {
       c.rsign = lpos;
       c.rcoord = xy[Y];
       c.rval = p[Y] + 1;
@@ -118,9 +118,10 @@ void RowTree::insert(const Point &point) {
   }
 }
 
-void RowTree::build(const vector<Point> &pts, const int low, const int high) {
+void RowTree::build(const vector<Point> &pts, const size_t low,
+                    const size_t high) {
   if (low <= high) {
-    int med = (low + high) / 2;
+    size_t med = (low + high) / 2;
     this->insert(pts[med]);
     this->build(pts, low, med - 1);
     this->build(pts, med + 1, high);
@@ -209,13 +210,13 @@ bool RowTree::isolated(const Point &point, const Direction dir) const {
   return true;
 }
 
-void init(Mesh &mesh) {
+void init(Mesh &mesh, size_t arity) {
   vector<RowTree> tmp4(arity, RowTree());
   for (unsigned j = 0; j < arity; ++j)
     mesh.push_back(tmp4);
 }
 
-void init(Strip &strip) {
+void init(Strip &strip, size_t arity) {
   vector<unordered_set<integer>> tmp4(arity, unordered_set<integer>());
   strip = tmp4;
 }

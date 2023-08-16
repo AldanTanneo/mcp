@@ -103,6 +103,8 @@ void print_arg() {
   cout << "@@@ action        = " << action_strg[action] << endl;
   cout << "@@@ closure       = " << closure_strg[closure] << endl;
   cout << "@@@ direction     = " << direction_strg[direction] << endl;
+  if (direction == dRAND)
+    cout << "@@@ random seed   = " << random_seed << endl;
   cout << "@@@ strategy      = " << strategy_strg[strategy] << endl;
   cout << "@@@ cooking       = " << cooking_strg[cooking] << endl;
   cout << "@@@ set cover     = " << (setcover ? "yes" : "no") << endl;
@@ -140,20 +142,33 @@ void read_matrix(Group_of_Matrix &matrix) {
     getline(cin, line);
 
   string group;
-  int numline = 0;
+  size_t numline = 0;
   while (getline(cin, line)) {
     numline++;
+    /*
     istringstream nums(line);
     nums >> group;
     Row temp;
-    int number;
+    integer number;
     while (nums >> number)
       temp.push_back(number);
+    */
+    const auto nums = split(line, ",");
+    group = nums.at(0);
+    Row temp;
+    for (size_t i = 1; i < nums.size(); ++i) {
+      integer x = integer(stoull(nums.at(i)));
+      DMAX = max(x, DMAX);
+      temp.push_back(x);
+    }
     if (arity == 0)
       arity = temp.size();
     else if (arity != temp.size())
       cout << "*** arity discrepancy on line " << numline << endl;
 
+    if (matrix.find(group) == matrix.end()) {
+      matrix.insert({group, Matrix()});
+    }
     matrix[group].add_row(std::move(temp));
   }
 
@@ -196,29 +211,31 @@ void print_matrix(const Group_of_Matrix &matrix) {
 // then checks wether the row is equal to the minimum
 template <typename R, typename M>
 bool InHornClosure(const R &row, const M &matrix) {
+  if (matrix.empty()) {
+    return false;
+  }
   Row MIN;
   bool any_above = false;
   for (size_t i = 0; i < matrix.num_rows(); ++i) {
     const R &r = matrix[i];
-    if (row >= r) {
-      if (any_above) {
+    if (r >= row) {
+      if (any_above)
         MIN.inplace_minimum(r);
-      } else {
+      else {
+        MIN = r.to_row();
         any_above = true;
-        MIN = Row(r.size());
-        for (size_t j = 0; j < r.size(); ++j) {
-          MIN[j] = r[j];
-        }
       }
     }
   }
   return any_above && row == MIN;
 }
 
-// explicit template instantiations
-template bool InHornClosure<RowView, MatrixMask>(const RowView &,
-                                                 const MatrixMask &);
-template bool InHornClosure<Row, Matrix>(const Row &, const Matrix &);
+bool InHornClosure(const RowView &r, const MatrixMask &m) {
+  return InHornClosure<RowView, MatrixMask>(r, m);
+}
+bool InHornClosure(const Row &r, const Matrix &m) {
+  return InHornClosure<Row, Matrix>(r, m);
+}
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -226,7 +243,9 @@ template bool InHornClosure<Row, Matrix>(const Row &, const Matrix &);
 // with the large strategy
 Formula learnHornLarge(const Matrix &positiveT, const Matrix &negativeF) {
   Formula varphi;
-  for (size_t i = 0; i <= negativeF.num_rows(); ++i) {
+  size_t arity = positiveT.num_cols();
+
+  for (size_t i = 0; i < negativeF.num_rows(); ++i) {
     const Row &f = negativeF[i];
     if (!sat_formula(f, varphi)) {
       continue;
@@ -235,31 +254,37 @@ Formula learnHornLarge(const Matrix &positiveT, const Matrix &negativeF) {
       cerr << "+++ the negative culprit is '" << f << "'" << endl;
       exit(2);
     }
+
     Clause c;
     c.reserve(arity);
-    for (int i = 0; i < arity; ++i) {
+    for (size_t i = 0; i < arity; ++i) {
       Sign sign = f[i] > 0 ? lneg : lnone;
       integer val = f[i] > 0 ? f[i] - 1 : 0;
       Literal lit(sign, 0, val);
       c.push_back(lit);
     }
     if (sat_clause(positiveT, c)) {
-      varphi.push_back(c);
+      varphi.push_back(std::move(c));
     } else {
       bool eliminated = false;
-      int i = 0;
-      while (!eliminated) {
-        if (f[i] < DCARD) {
-          Clause newc = c;
-          newc[i].sign = (Sign)(c[i].sign | lpos);
-          newc[i].pval = f[i] + 1;
-          if (sat_clause(positiveT, newc)) {
-            // varphi.push_back(newc);
-            varphi.push_back(newc);
+      size_t i = 0;
+      Literal old;
+      while (!eliminated && i < arity) {
+        if (f[i] < DMAX) {
+          old = c[i];
+          c[i].sign = (Sign)(c[i].sign | lpos);
+          c[i].pval = f[i] + 1;
+          if (sat_clause(positiveT, c)) {
+            varphi.push_back(std::move(c));
             eliminated = true;
+          } else {
+            c[i] = old;
           }
         }
         i++;
+      }
+      if (!eliminated) {
+        cerr << "+++ FAILURE: could not eliminate..." << endl;
       }
     }
   }
@@ -277,6 +302,10 @@ Formula learnBijunctive(const Matrix &positiveT, const Matrix &negativeF) {
   bucket::Bucket bucket;
   mesh::Strip strip;
   mesh::Mesh mesh;
+
+  size_t arity = positiveT.num_cols();
+  mesh::init(mesh, arity);
+  mesh::init(strip, arity);
 
   for (size_t k = 0; k < negativeF.num_rows(); ++k) {
     const Row &f = negativeF[k];
@@ -299,14 +328,13 @@ Formula learnBijunctive(const Matrix &positiveT, const Matrix &negativeF) {
       while (!eliminated && j < arity) {
         const bucket::Point f2 = {f[i], f[j]};
         const std::array<size_t, 2> ij = {i, j};
-
         // Test if f2 can be isolated by trying all directions
 
         mesh::Direction q = mesh::NW;
         while (!eliminated) {
           if (mesh[i][j].isolated(f2, q)) {
             c = mesh::isolation(f2, ij, q);
-            eliminated = bucket::valid(c) ? true : false;
+            eliminated = bucket::valid(c);
           }
 
           if (q == mesh::SW)
@@ -328,14 +356,14 @@ Formula learnBijunctive(const Matrix &positiveT, const Matrix &negativeF) {
     }
   }
 
-  Formula B = get_formula(bucket);
+  Formula B = get_formula(bucket, arity);
   cook(B);
   return B;
 }
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Formula post_prod(const vector<int> &A, const Matrix &F,
+Formula post_prod(const vector<size_t> &A, const Matrix &F,
                   const Formula &formula) {
   Formula schf;
   if (setcover == true) {
@@ -394,12 +422,12 @@ Formula post_prod(const vector<int> &A, const Matrix &F,
 // one group as positive agains one group of negative examples
 void OneToOne() {
 
-  for (int i = 0; i < grps.size(); ++i) {
-    Matrix &T = group_of_matrix[grps[i]];
-    for (int j = 0; j < grps.size(); ++j) {
+  for (size_t i = 0; i < grps.size(); ++i) {
+    Matrix T = group_of_matrix[grps[i]].clone();
+    for (size_t j = 0; j < grps.size(); ++j) {
       if (j == i)
         continue;
-      Matrix &F = group_of_matrix[grps[j]];
+      Matrix F = group_of_matrix[grps[j]].clone();
 
       if (closure == clDHORN) {
         cout << "+++ swapping polarity of vectors and treating swapped vectors "
@@ -420,8 +448,8 @@ void OneToOne() {
       } else {
         int hw = std::accumulate(sect.cbegin(), sect.cend(), 0);
         cout << "+++ Relevant variables [" << hw << "]: ";
-        vector<int> A;
-        for (int k = 0; k < sect.size(); ++k)
+        vector<size_t> A;
+        for (size_t k = 0; k < sect.size(); ++k)
           if (sect[k] == true) {
             A.push_back(k);
             if (varswitch) {
@@ -432,25 +460,25 @@ void OneToOne() {
             cout << " ";
           }
         cout << endl;
-        cout << "+++ A [" << hw << "] = {";
-        for (int coord : A)
+        cout << "+++ A [" << hw << "] = { ";
+        for (size_t coord : A)
           cout << offset + coord << " ";
         cout << "}" << endl;
-        Matrix TsectA = restrict(sect, T);
-        Matrix FsectA = restrict(sect, F);
+        T.restrict(sect);
+        F.restrict(sect);
 
-        cout << "+++ T|_A [" << TsectA.num_rows() << "]";
+        cout << "+++ T|_A [" << T.num_rows() << "]";
         if (display >= ySECTION) {
           cout << " = { " << endl;
-          cout << TsectA;
+          cout << T;
           cout << "+++ }";
         }
         cout << endl;
 
-        cout << "+++ F|_A [" << FsectA.num_rows() << "]";
+        cout << "+++ F|_A [" << F.num_rows() << "]";
         if (display >= ySECTION) {
           cout << " = { " << endl;
-          cout << FsectA;
+          cout << F;
           cout << "+++ }";
         }
         cout << endl;
@@ -471,10 +499,10 @@ void OneToOne() {
 
         Formula formula;
         if (closure == clHORN || closure == clDHORN)
-          formula = strategy == sEXACT ? learnHornExact(TsectA)
-                                       : learnHornLarge(TsectA, FsectA);
+          formula =
+              strategy == sEXACT ? learnHornExact(T) : learnHornLarge(T, F);
         else if (closure == clBIJUNCTIVE) {
-          formula = learnBijunctive(TsectA, FsectA);
+          formula = learnBijunctive(T, F);
           if (formula.empty()) {
             cout << "+++ bijunctive formula not possible for this configuration"
                  << endl
@@ -482,10 +510,9 @@ void OneToOne() {
             continue;
           }
         } else if (closure == clCNF)
-          formula = strategy == sLARGE ? learnCNFlarge(FsectA)
-                                       : learnCNFexact(TsectA);
+          formula = strategy == sLARGE ? learnCNFlarge(F) : learnCNFexact(T);
 
-        Formula schf = post_prod(A, FsectA, formula);
+        Formula schf = post_prod(A, F, formula);
         if (!formula_output.empty())
           write_formula(grps[i], grps[j], A, schf);
       }
@@ -497,11 +524,11 @@ void OneToOne() {
 
 // selected group of positive examples against all other groups together as
 // negative examples
-void SelectedToAll(const string grp) {
-  Matrix &T = group_of_matrix[grp];
+void SelectedToAll(const string &grp) {
+  Matrix T = group_of_matrix.at(grp).clone();
   Matrix F;
   vector<string> index;
-  for (int j = 0; j < grps.size(); ++j) {
+  for (size_t j = 0; j < grps.size(); ++j) {
     if (grps[j] == grp)
       continue;
 
@@ -522,7 +549,7 @@ void SelectedToAll(const string grp) {
     polswap_matrix(F);
   }
 
-  vector<bool> sect = minsect(T, F);
+  Mask sect = minsect(T, F);
   cout << "+++ Section of groups T=" << grp << " and F=( ";
   for (string coord : index)
     cout << coord << " ";
@@ -535,8 +562,8 @@ void SelectedToAll(const string grp) {
   else {
     int hw = std::accumulate(sect.cbegin(), sect.cend(), 0);
     cout << "+++ Relevant variables [" << hw << "]: ";
-    vector<int> A;
-    for (int k = 0; k < sect.size(); ++k)
+    vector<size_t> A;
+    for (size_t k = 0; k < sect.size(); ++k)
       if (sect[k]) {
         A.push_back(k);
         if (varswitch) {
@@ -548,34 +575,33 @@ void SelectedToAll(const string grp) {
       }
     cout << endl;
     cout << "+++ A [" << hw << "] = { ";
-    for (int var : A)
+    for (size_t var : A)
       cout << offset + var << " ";
     cout << "}" << endl;
-    Matrix TsectA = restrict(sect, T);
-    Matrix FsectA = restrict(sect, F);
+    T.restrict(sect);
+    F.restrict(sect);
 
-    cout << "+++ T|_A [" << TsectA.num_rows() << "]";
+    cout << "+++ T|_A [" << T.num_rows() << "," << T.num_cols() << "]";
     if (display >= ySECTION) {
       cout << " = { " << endl;
-      cout << TsectA;
+      cout << T;
       cout << "+++ }";
     }
     cout << endl;
 
-    cout << "+++ F|_A [" << FsectA.num_rows() << "]";
+    cout << "+++ F|_A [" << F.num_rows() << "," << F.num_cols() << "]";
     if (display >= ySECTION) {
       cout << " = { " << endl;
-      cout << FsectA;
+      cout << F;
       cout << "+++ }";
     }
     cout << endl;
 
     Formula formula;
     if (closure == clHORN || closure == clDHORN)
-      formula = strategy == sEXACT ? learnHornExact(TsectA)
-                                   : learnHornLarge(TsectA, FsectA);
+      formula = strategy == sEXACT ? learnHornExact(T) : learnHornLarge(T, F);
     else if (closure == clBIJUNCTIVE) {
-      formula = learnBijunctive(TsectA, FsectA);
+      formula = learnBijunctive(T, F);
       if (formula.empty()) {
         cout << "+++ bijunctive formula not possible for this configuration"
              << endl
@@ -583,10 +609,9 @@ void SelectedToAll(const string grp) {
         return;
       }
     } else if (closure == clCNF)
-      formula =
-          strategy == sLARGE ? learnCNFlarge(FsectA) : learnCNFexact(TsectA);
+      formula = strategy == sLARGE ? learnCNFlarge(F) : learnCNFexact(T);
 
-    Formula schf = post_prod(A, FsectA, formula);
+    Formula schf = post_prod(A, F, formula);
     if (!formula_output.empty())
       write_formula(grp, A, schf);
   }
@@ -597,7 +622,7 @@ void SelectedToAll(const string grp) {
 // one group of positive examples against all other groups together as negative
 // examples
 void OneToAll() {
-  for (auto grp : grps)
+  for (auto &grp : grps)
     SelectedToAll(grp);
 }
 
@@ -605,15 +630,16 @@ void OneToAll() {
 // examples no section is done
 void OneToAllNosection() {
 
-  vector<int> names(arity);
-  for (int nms = 0; nms < arity; ++nms)
+  vector<size_t> names(arity);
+  for (size_t nms = 0; nms < arity; ++nms)
     names[nms] = nms;
 
-  for (int i = 0; i < grps.size(); ++i) {
-    Matrix &T = group_of_matrix[grps[i]];
+  for (size_t i = 0; i < grps.size(); ++i) {
+    cout << "group " << i << ": " << grps[i] << endl;
+    Matrix T = group_of_matrix[grps[i]].clone();
     Matrix F;
     vector<string> index;
-    for (int j = 0; j < grps.size(); ++j) {
+    for (size_t j = 0; j < grps.size(); ++j) {
       if (j == i)
         continue;
 
@@ -727,7 +753,7 @@ int main(int argc, char **argv) {
   }
 
   time_t finish_time = time(nullptr);
-  cout << "+++ time = " << time2string(difftime(finish_time, start_time))
+  cout << "+++ time = " << time2string(int(difftime(finish_time, start_time)))
        << endl;
 
   cout << "+++ end of run +++" << endl;

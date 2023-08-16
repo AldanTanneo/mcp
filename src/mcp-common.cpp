@@ -33,7 +33,9 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <numeric>
 #include <random>
 #include <set>
 #include <sstream>
@@ -48,9 +50,12 @@ bool debug = false;
 // bool varswitch = false;
 // vector<string> varnames;
 
-map<Row, int> pred;        // predecessor function for Zanuttini's algorithm
-map<Row, int> succ;        // successor function for Zanuttini's algorithm
-map<Row, vector<int>> sim; // sim table for Zanuttini's algorithm
+// predecessor function for Zanuttini's algorithm
+unordered_map<Row, size_t> pred;
+// successor function for Zanuttini's algorithm
+unordered_map<Row, size_t> succ;
+// sim table for Zanuttini's algorithm
+unordered_map<Row, vector<size_t>> sim;
 
 // const int SENTINEL     = -1;
 const string STDIN = "STDIN";
@@ -96,9 +101,12 @@ const string strategy_strg[] = {"large", "exact"};
 // "peek",        "section", "show"};
 const string arch_strg[] = {"seq", "mpi", "pthread", "hybrid"};
 
+unsigned int random_seed;
+
 //--------------------------------------------------------------------------------------------------
 
 void read_arg(int argc, char *argv[]) { // reads the input parameters
+  random_seed = unsigned(time(0));
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
@@ -132,13 +140,14 @@ void read_arg(int argc, char *argv[]) { // reads the input parameters
         direction = dHIGHCARD;
       } else if (dir == "random" || dir == "rand" || dir == "r") {
         direction = dRAND;
-        // } else if (dir == "optimum"
-        // 		 || dir == "optimal"
-        // 		 || dir == "opt"
-        // 		 || dir ==  "x") {
-        // 	direction = dOPT;
+      } else if (dir == "optimal" || dir == "opt") {
+        direction = dOPT;
       } else
         cerr << "+++ unknown direction option " << dir << endl;
+    } else if (arg == "--random-seed" || arg == "--seed") {
+      string seed = argv[++argument];
+      int seed_num = stoi(seed);
+      random_seed = unsigned(seed_num);
     } else if (arg == "--closure" || arg == "-clo") {
       string cl = argv[++argument];
       if (cl == "horn" || cl == "Horn" || cl == "HORN" || cl == "h") {
@@ -225,7 +234,7 @@ void read_arg(int argc, char *argv[]) { // reads the input parameters
         cerr << "+++ unknown matrix print option " << mtx << endl;
     } else if (arg == "--offset" || arg == "-of" || arg == "--shift" ||
                arg == "-sh") {
-      offset = stoi(argv[++argument]);
+      offset = stoul(argv[++argument]);
     } else if (arch > archMPI && (arg == "--chunk" || arg == "-ch")) {
       chunkLIMIT = stoi(argv[++argument]);
     } else if (arch != archSEQ && (arg == "--tpath" || arg == "-tp")) {
@@ -234,20 +243,27 @@ void read_arg(int argc, char *argv[]) { // reads the input parameters
       latex = argv[++argument];
     } else if (arg == "--debug") {
       debug = true;
-    } else
+    } else if (arg == "--domain-bound" || arg == "--dmax") {
+      string dmax_str = argv[++argument];
+      DMAX = integer(stoull(dmax_str));
+    } else {
       cerr << "+++ unknown option " << arg << endl;
+    }
     ++argument;
   }
+
+  if (direction == dRAND)
+    std::srand(random_seed);
 }
 
-int hamming_distance(const Row &u, const Row &v) {
+size_t hamming_distance(const Row &u, const Row &v) {
   // Hamming distance between two tuples
   if (u.size() != v.size())
-    return SENTINEL;
+    return size_t(SENTINEL);
 
-  int sum = 0;
-  for (int i = 0; i < u.size(); ++i)
-    sum += abs((long int)u[i] - (long int)v[i]);
+  size_t sum = 0;
+  for (size_t i = 0; i < u.size(); ++i)
+    sum += size_t(abs((long int)u[i] - (long int)v[i]));
   return sum;
 }
 
@@ -270,9 +286,15 @@ bool InHornClosure(const RowView &row, const Matrix &M) {
 }
 */
 
+bool SHCPsolvable(const Matrix &T, const Matrix &F) {
+  for (size_t i = 0; i < F.num_rows(); ++i) {
+    if (InHornClosure(F[i], T))
+      return false;
+  }
+  return true;
+}
+
 // is the intersection of F and of the Horn closure of T empty?
-//
-// T = MinimizeObs(T);	// Optional, may not be worth the effort
 bool SHCPsolvable(const MatrixMask &T, const MatrixMask &F) {
   for (size_t i = 0; i < F.num_rows(); ++i) {
     if (InHornClosure(F[i], T))
@@ -282,6 +304,25 @@ bool SHCPsolvable(const MatrixMask &T, const MatrixMask &F) {
 }
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+bool isect_nonempty(const Matrix &T, const Matrix &F) {
+  unordered_set<reference_wrapper<const Row>, std::hash<Row>,
+                std::equal_to<Row>>
+      orig{};
+
+  // insert rowviews into the hashset...
+  for (size_t i = 0; i < T.num_rows(); ++i) {
+    orig.insert(T[i]);
+  }
+
+  // check for the presence of any row from F in the hashset
+  for (size_t i = 0; i < F.num_rows(); ++i) {
+    if (orig.find(F[i]) != orig.end())
+      return true;
+  }
+
+  return false;
+}
 
 // checks if the intersection of T and F is non empty
 bool isect_nonempty(const MatrixMask &T, const MatrixMask &F) {
@@ -301,8 +342,15 @@ bool isect_nonempty(const MatrixMask &T, const MatrixMask &F) {
   return false;
 }
 
+bool inadmissible(const Matrix &T, const Matrix &F) {
+  if (closure == clHORN || closure == clDHORN)
+    return !SHCPsolvable(T, F);
+  else
+    return isect_nonempty(T, F);
+}
+
 bool inadmissible(const MatrixMask &T, const MatrixMask &F) {
-  if (closure < clBIJUNCTIVE)
+  if (closure == clHORN || closure == clDHORN)
     return !SHCPsolvable(T, F);
   else
     return isect_nonempty(T, F);
@@ -318,19 +366,37 @@ int hamming_weight(const vector<bool> &row) { // Hamming weight of a tuple
   return sum;
 }
 
+static inline Mask eliminate(const Matrix &T, const Matrix &F,
+                             const vector<size_t> &coords) {
+  const size_t n = T.num_cols();
+
+  // boolean mask
+  Mask mask(n, true);
+  MatrixMask Tm(T), Fm(F);
+
+  for (size_t i : coords) {
+    mask[i] = false;
+    Tm.hide_column(i);
+    Fm.hide_column(i);
+    if (inadmissible(Tm, Fm)) {
+      mask[i] = true;
+      Tm = MatrixMask(T, mask);
+      Fm = MatrixMask(F, mask);
+    }
+  }
+
+  return mask;
+}
+
 // computes the minimal section for Horn or dual Horn closures
-Mask minsect(Matrix &T, Matrix &F) {
-  const int n = T.num_cols();
+Mask minsect(const Matrix &T, const Matrix &F) {
+  const size_t n = T.num_cols();
 
   if (inadmissible(T, F)) {
     disjoint = false;
     Mask emptymask(n, false);
     return emptymask;
   }
-
-  // boolean mask
-  Mask mask(n, true);
-  MatrixMask Tm(T), Fm(F);
 
   vector<size_t> coords(n);
 
@@ -365,22 +431,11 @@ Mask minsect(Matrix &T, Matrix &F) {
     break;
   }
 
-  for (int i : coords) {
-    mask[i] = false;
-    Tm.hide_column(i);
-    Fm.hide_column(i);
-    if (inadmissible(Tm, Fm)) {
-      mask[i] = true;
-      Tm = MatrixMask(T, mask);
-      Fm = MatrixMask(F, mask);
-    }
-  }
-
-  return mask;
+  return eliminate(T, F, coords);
 }
 
-void w_f(const string &filename, const string suffix, const vector<int> &names,
-         const Formula &formula) {
+void w_f(const string &filename, const string suffix,
+         const vector<size_t> &names, const Formula &formula) {
   // open the file and write the formula in it
   ofstream formfile;
   formfile.open(filename);
@@ -390,9 +445,9 @@ void w_f(const string &filename, const string suffix, const vector<int> &names,
   } else {
     formfile << suffix << " " << arity << " " << formula.cbegin()->size() << " "
              << offset << endl;
-    int old_offset = offset;
+    size_t old_offset = offset;
     offset = 1;
-    for (int n : names)
+    for (size_t n : names)
       formfile << " " << n + offset;
     formfile << endl;
     formfile << formula2dimacs(names, formula) << endl;
@@ -402,14 +457,14 @@ void w_f(const string &filename, const string suffix, const vector<int> &names,
 }
 
 void write_formula(const string &suffix1, const string &suffix2,
-                   const vector<int> &names, const Formula &formula) {
+                   const vector<size_t> &names, const Formula &formula) {
   // write formula to a file in DIMACS format
   // offset begins at 1, if not set otherwise
   w_f(formula_output + "_" + suffix1 + "_" + suffix2 + ".log", suffix1, names,
       formula);
 }
 
-void write_formula(const string &suffix, const vector<int> &names,
+void write_formula(const string &suffix, const vector<size_t> &names,
                    const Formula &formula) {
   // write formula to a file in DIMACS format
   // offset begins at 1, if not set otherwise
@@ -420,7 +475,7 @@ bool satisfied_by(const Clause &clause, const Matrix &T) {
   // is the clause satified by all tuples in T?
   for (size_t i = 0; i < T.num_rows(); ++i) {
     bool satisfied = false;
-    for (int j = 0; j < clause.size(); ++j) {
+    for (size_t j = 0; j < clause.size(); ++j) {
       if (clause[j].sat(T.get(i, j))) {
         satisfied = true;
         break;
@@ -450,9 +505,9 @@ int numlit(const Clause &clause) {
   return i;
 }
 
-int firstlit(const Clause &clause) {
+size_t firstlit(const Clause &clause) {
   // coordinate of first literal
-  int i = 0;
+  size_t i = 0;
   while (i < clause.size() && clause[i].sign == lnone)
     i++;
   return i;
@@ -460,7 +515,7 @@ int firstlit(const Clause &clause) {
 
 bool clauseLT(const Clause &a, const Clause &b) {
   // is clause a < clause b in literals ?
-  for (int i = 0; i < a.size(); ++i)
+  for (size_t i = 0; i < a.size(); ++i)
     if (a[i] < b[i])
       return true;
   return false;
@@ -485,29 +540,31 @@ bool clauseGE(const Clause &a, const Clause &b) {
   return true;
 }
 
-int partition_formula(Formula &formula, int low, int high) {
-  Clause pivot = formula[high];
-  int p_index = low;
+size_t partition_formula(Formula &formula, size_t low, size_t high) {
+  Clause &pivot = formula[high];
+  size_t p_index = low;
 
-  for (int i = low; i < high; i++)
-    if (pivot >= formula[i]) {
-      Clause t = formula[i];
-      formula[i] = formula[p_index];
-      formula[p_index] = t;
+  for (size_t i = low; i < high; i++) {
+    if (clauseGE(pivot, formula[i])) {
+      if (p_index != i) {
+        swap(formula[i], formula[p_index]);
+      }
       p_index++;
     }
-  Clause t = formula[high];
-  formula[high] = formula[p_index];
-  formula[p_index] = t;
+  }
+  if (p_index < high)
+    swap(formula[high], formula[p_index]);
 
   return p_index;
 }
 
-void sort_formula(Formula &formula, int low, int high) {
-  if (low < high) {
-    int p_index = partition_formula(formula, low, high);
-    sort_formula(formula, low, p_index - 1);
-    sort_formula(formula, p_index + 1, high);
+void sort_formula(Formula &formula, size_t low, size_t high) {
+  if (high < formula.size() && low < high) {
+    size_t p_index = partition_formula(formula, low, high);
+    if (p_index > 0 && low < p_index - 1)
+      sort_formula(formula, low, p_index - 1);
+    if (p_index < numeric_limits<size_t>::max() && p_index + 1 < high)
+      sort_formula(formula, p_index + 1, high);
   }
 }
 
@@ -523,79 +580,82 @@ void restrict(const Mask &sect, Matrix &A) {
 Row minHorn(const Matrix &M) {
   // computes the minimal tuple of a matrix coordinate wise
   Row mh = M[0].clone();
-  for (int i = 1; i < M.num_rows(); ++i)
+  for (size_t i = 1; i < M.num_rows(); ++i)
     mh.inplace_minimum(M[i]);
   return mh;
 }
 
+// x >= d & (x >= d' + c), && d >= d' => x >= d
+// x >= d & (x <= d' + c), && d > d' => x >= d + c
+
+// x <= d & (x <= d' + c), && d <= d' => x <= d
+// x <= d & (x >= d' + c), && d < d' => x <= d + c
 Formula unitres(const Formula &formula) { // unit resolution
   Formula units;
   Formula clauses;
   /*
-  for (Clause cl : formula)
-    if (numlit(cl) == 1)
-      units.push_back(cl);
-    else
-      clauses.push_back(cl);
+    for (Clause cl : formula)
+      if (numlit(cl) == 1)
+        units.push_back(cl);
+      else
+        clauses.push_back(cl);
 
-  Formula resUnits = units;
-  while (!units.empty() && !clauses.empty()) {
-    Clause &unit = units.front();
-    units.pop_front();
-    int index = 0;
-    while (unit[index] == lnone)
-      index++;
-    for (int j = 0; j < clauses.size(); j++) {
-      Clause clause = clauses[j];
-      if ((unit[index] == lpos && clause[index] == lneg) ||
-          (unit[index] == lneg && clause[index] == lpos))
-        clauses[j][index] = lnone;
+    Formula resUnits = units;
+    while (!units.empty() && !clauses.empty()) {
+      Clause &unit = units.front();
+      units.pop_front();
+      int index = 0;
+      while (unit[index].sign == lnone)
+        index++;
+      for (int j = 0; j < clauses.size(); j++) {
+        Clause clause = clauses[j];
+        if ((unit[index] == lpos && clause[index] == lneg) ||
+            (unit[index] == lneg && clause[index] == lpos))
+          clauses[j][index] = lnone;
+      }
+
+      auto it = clauses.begin();
+      while (it != clauses.end())
+        if (numlit(*it) == 1) {
+          units.push_back(*it);
+          resUnits.push_back(*it);
+          it = clauses.erase(it);
+        } else
+          ++it;
     }
 
-    auto it = clauses.begin();
-    while (it != clauses.end())
-      if (numlit(*it) == 1) {
-        units.push_back(*it);
-        resUnits.push_back(*it);
-        it = clauses.erase(it);
-      } else
-        ++it;
-  }
+    // sort(resUnits.begin(), resUnits.end());
+    sort_formula(resUnits, 0, resUnits.size() - 1);
+    auto last1 = unique(resUnits.begin(), resUnits.end());
+    resUnits.erase(last1, resUnits.end());
 
-  // sort(resUnits.begin(), resUnits.end());
-  sort_formula(resUnits, 0, resUnits.size() - 1);
-  auto last1 = unique(resUnits.begin(), resUnits.end());
-  resUnits.erase(last1, resUnits.end());
-
-  // test if there are no two unit clauses having literals of opposite parity
-  int ru_bound = resUnits.size();
-  for (int i = 0; i < ru_bound - 1; ++i) {
-    Clause unit_i = resUnits[i];
-    int index = 0;
-    while (index < unit_i.size() && unit_i[index] == lnone)
-      index++;
-    if (index < ru_bound) {
-      for (int j = i + 1; j < ru_bound; ++j) {
-        Clause unit_j = resUnits[j];
-        if (unit_i[index] == lpos && unit_j[index] == lneg ||
-            unit_i[index] == lneg && unit_j[index] == lpos) {
-          Clause emptyClause(unit_i.size(), lnone);
-          Formula emptyFormula;
-          emptyFormula.push_back(emptyClause);
-          return emptyFormula;
+    // test if there are no two unit clauses having literals of opposite parity
+    int ru_bound = resUnits.size();
+    for (int i = 0; i < ru_bound - 1; ++i) {
+      Clause unit_i = resUnits[i];
+      int index = 0;
+      while (index < unit_i.size() && unit_i[index] == lnone)
+        index++;
+      if (index < ru_bound) {
+        for (int j = i + 1; j < ru_bound; ++j) {
+          Clause unit_j = resUnits[j];
+          if (unit_i[index] == lpos && unit_j[index] == lneg ||
+              unit_i[index] == lneg && unit_j[index] == lpos) {
+            Clause emptyClause(unit_i.size(), lnone);
+            Formula emptyFormula;
+            emptyFormula.push_back(emptyClause);
+            return emptyFormula;
+          }
         }
       }
     }
 
-  }
-
-
-  clauses.insert(clauses.end(), resUnits.begin(), resUnits.end());
-  // sort(clauses.begin(), clauses.end()), cmp_numlit;
-  sort_formula(clauses, 0, clauses.size() - 1);
-  auto last2 = unique(clauses.begin(), clauses.end());
-  clauses.erase(last2, clauses.end());
-  */
+    clauses.insert(clauses.end(), resUnits.begin(), resUnits.end());
+    // sort(clauses.begin(), clauses.end()), cmp_numlit;
+    sort_formula(clauses, 0, clauses.size() - 1);
+    auto last2 = unique(clauses.begin(), clauses.end());
+    clauses.erase(last2, clauses.end());
+    */
 
   return clauses;
 }
@@ -603,7 +663,7 @@ Formula unitres(const Formula &formula) { // unit resolution
 bool subsumes(const Clause &cla, const Clause &clb) {
   // does clause cla subsume clause clb ?
   // cla must be smaller than clb
-  for (int i = 0; i < cla.size(); ++i)
+  for (size_t i = 0; i < cla.size(); ++i)
     if ((cla[i].sign & clb[i].sign & lneg && cla[i].nval < clb[i].nval) ||
         (cla[i].sign & clb[i].sign & lpos && cla[i].pval > clb[i].pval))
       return false;
@@ -641,7 +701,7 @@ bool empty_clause(const Clause &clause) { // is the clause empty ?
 Formula redundant(const Formula &formula) { // eliminating redundant clauses
                                             // clauses must be sorted by length
                                             // --- IS GUARANTEED
-  const int lngt = formula[0].size();
+  const size_t lngt = formula[0].size();
 
   Formula prefix, suffix;
   // prefix.insert(prefix.end(), formula.begin(), formula.end());
@@ -650,7 +710,7 @@ Formula redundant(const Formula &formula) { // eliminating redundant clauses
   // sort(prefix.begin(), prefix.end(), cmp_numlit);
   // sort_formula(prefix, 0, prefix.size()-1);
 
-  int left = 0;
+  size_t left = 0;
   while (left < prefix.size() && numlit(prefix[left]) == 1)
     left++;
 
@@ -658,7 +718,7 @@ Formula redundant(const Formula &formula) { // eliminating redundant clauses
     Clause pivot = prefix.back();
     prefix.pop_back();
     Formula newUnits;
-    for (int i = 0; i < pivot.size(); ++i) {
+    for (size_t i = 0; i < pivot.size(); ++i) {
       if (pivot[i].sign != lnone) {
         Clause newclause(lngt, Literal::none());
         newclause[i] = pivot[i].swap();
@@ -689,16 +749,32 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
   // perform set cover optimizing the clauses as subsets falsified by tuples as
   // universe Universe = tuples in F SubSets  = clauses of a formula
   enum Presence { NONE = 0, ABSENT = 1, PRESENT = 2 };
+
   typedef pair<reference_wrapper<const Row>, reference_wrapper<const Clause>>
       Falsification;
+  struct falsification_hasher {
+    size_t operator()(const Falsification &f) const noexcept {
+      return hash_combine(hash_combine(std::hash<Row>{}(f.first), 0xff),
+                          std::hash<Clause>{}(f.second));
+    }
+  };
+  struct falsification_eq {
+    bool operator()(const Falsification &a,
+                    const Falsification &b) const noexcept {
+      return a.first.get() == b.first.get() && a.second.get() == b.second.get();
+    }
+  };
+
   // Incidence matrix indicating which tuple (row) falsifies which clause
-  map<Falsification, Presence> incidence;
+  unordered_map<Falsification, Presence, falsification_hasher, falsification_eq>
+      incidence;
   vector<size_t> R; // tuples still active == not yet falsified
   Formula selected; // selected clauses for falsification
 
   for (size_t i = 0; i < Universe.num_rows(); ++i) {
-    const Row &tuple = Universe[i];
     R.push_back(i);
+
+    const Row &tuple = Universe[i];
     for (const Clause &clause : SubSets)
       incidence[make_pair(cref(tuple), cref(clause))] =
           sat_clause(tuple, clause) ? ABSENT : PRESENT;
@@ -707,17 +783,20 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
   // perform set cover
   while (!R.empty()) {
     // How many tuples does the clause falsify (intersect)?
-    map<reference_wrapper<const Clause>, int> intersect;
+    unordered_map<reference_wrapper<const Clause>, size_t, std::hash<Clause>>
+        intersect;
     for (const Clause &clause : SubSets)
       intersect[clause] = 0;
     for (size_t i : R) {
       const Row &tuple = Universe[i];
-      for (const Clause &clause : SubSets)
-        if (incidence[make_pair(cref(tuple), cref(clause))] == PRESENT)
+      for (const Clause &clause : SubSets) {
+        if (incidence[make_pair(cref(tuple), cref(clause))] == PRESENT) {
           ++intersect[clause];
+        }
+      }
     }
 
-    int maxw = 0;
+    size_t maxw = 0;
     Clause maxset;
     for (const Clause &clause : SubSets) {
       if (intersect[clause] > maxw) {
@@ -734,13 +813,16 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
     while (it != R.end()) {
       const Row &tuple = Universe[*it];
       if (incidence[make_pair(cref(tuple), cref(maxset))] == PRESENT) {
-        for (const Clause &clause : SubSets)
+        for (const Clause &clause : SubSets) {
           incidence[make_pair(cref(tuple), cref(clause))] = ABSENT;
+        }
         it = R.erase(it);
-      } else
+      } else {
         ++it;
+      }
     }
   }
+
   // sort(selected.begin(), selected.end(), cmp_numlit);
   sort_formula(selected, 0, selected.size() - 1);
   return selected;
@@ -751,10 +833,8 @@ void cook(Formula &formula) {
   if (!formula.empty()) {
     if (cooking == ckRAW)
       sort_formula(formula, 0, formula.size() - 1);
-    // sort(formula.begin(), formula.end(), cmp_numlit);
     if (cooking >= ckBLEU) {
       formula = unitres(formula);
-      // formula = binres(formula);
     }
     if (cooking >= ckMEDIUM)
       formula = subsumption(formula);
@@ -769,17 +849,19 @@ void predecessor(const Matrix &R) {
   // predecessor function of Zanuttini's algorithm
   // R must be lexicographically sorted
   pred.clear();
-  pred[R[0]] = SENTINEL;
+  pred[R[0].clone()] = size_t(SENTINEL);
+  // pred.insert({R[0].clone(), SENTINEL});
+
   auto p = cref(R[0]);
-  for (int i = 1; i < R.num_rows(); ++i) {
+  for (size_t i = 1; i < R.num_rows(); ++i) {
     const Row &m = R[i];
-    int j = 0;
-    for (int k = 0; k < m.size(); ++k)
+    size_t j = 0;
+    for (size_t k = 0; k < m.size(); ++k)
       if (m[k] == p.get()[k])
         j++;
       else
         break;
-    pred[R[i]] = j;
+    pred[R[i].clone()] = j;
     p = m;
   }
 }
@@ -789,37 +871,38 @@ void successor(const Matrix &R) {
   // R must be lexicographically sorted
   succ.clear();
   auto m = cref(R[0]);
-  for (int i = 1; i < R.num_rows(); ++i) {
+  for (size_t i = 1; i < R.num_rows(); ++i) {
     const Row &s = R[i];
-    int j = 0;
-    for (int k = 0; k < m.get().size(); ++k)
+    size_t j = 0;
+    for (size_t k = 0; k < m.get().size(); ++k)
       if (m.get()[k] == s[k])
         j++;
       else
         break;
-    succ[R[i - 1]] = j;
+    succ[R[i - 1].clone()] = j;
     m = s;
   }
-  succ[R[R.num_rows() - 1]] = SENTINEL;
+  succ[R[R.num_rows() - 1].clone()] = size_t(SENTINEL);
 }
 
 void simsim(const Matrix &R) { // sim array of Zanuttini's algorithm
   sim.clear();
   for (size_t i = 0; i < R.num_rows(); ++i) {
     const Row &mm = R[i];
-    const vector<int> dummy(mm.size(), SENTINEL);
-    sim[mm] = dummy;
+    const vector<size_t> dummy(mm.size(), size_t(SENTINEL));
+    sim[mm.clone()] = std::move(dummy);
+
     for (size_t k = 0; k < R.num_rows(); ++k) {
       const Row &m1m = R[k];
       if (mm == m1m)
         continue;
-      int j0 = 0;
+      size_t j0 = 0;
       while (mm[j0] == m1m[j0])
         ++j0;
-      int j = j0;
+      size_t j = j0;
       while (j < m1m.size() && (m1m[j] == true || mm[j] == false)) {
-        if (j > succ[mm] && mm[j] == false && m1m[j] == true)
-          sim[mm][j] = max(sim[mm][j], j0);
+        if (j > succ[mm.clone()] && mm[j] == false && m1m[j] == true)
+          sim[mm.clone()][j] = max(sim[mm.clone()][j], j0);
         j++;
       }
     }
@@ -908,10 +991,10 @@ Formula primality(const Formula &phi, const Matrix &M) {
 Formula learnHornExact(const Matrix &T) {
   Formula H;
 
-  const int lngt = T.num_cols();
+  const size_t lngt = T.num_cols();
   if (T.num_rows() == 1) { // T has only one row / tuple
     const Row &t = T[0];
-    for (int i = 0; i < lngt; ++i) {
+    for (size_t i = 0; i < lngt; ++i) {
       Clause clause(lngt, Literal::none());
       clause[i] = Literal::pos(t[i]);
       H.push_back(clause);
@@ -951,14 +1034,14 @@ Formula learnCNFlarge(const Matrix &F) {
     const Row &row = F[j];
     Clause clause;
     // for (bool bit : row)
-    for (int i = 0; i < row.size(); ++i) {
+    for (size_t i = 0; i < row.size(); ++i) {
       // isolate row[i]
       Literal lit;
       if (row[i] > 0) {
         lit.sign = lneg;
         lit.nval = row[i] - 1;
       }
-      if (row[i] < DCARD) {
+      if (row[i] < DMAX) {
         lit.sign = Sign(lit.sign | lpos);
         lit.pval = row[i] + 1;
       }
@@ -973,8 +1056,8 @@ Formula learnCNFlarge(const Matrix &F) {
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 // UNSAFE if m1 == m2
-int fork(const Row &m1, const Row &m2) {
-  int i = 0;
+size_t fork(const Row &m1, const Row &m2) {
+  size_t i = 0;
   // we can guarantee that always m1 != m2, therefore
   // we can drop i < m1.size()
   while (m1[i] == m2[i])
@@ -982,12 +1065,12 @@ int fork(const Row &m1, const Row &m2) {
   return i;
 }
 
-deque<int> fork(const Matrix &M) {
-  deque<int> frk(M.num_rows() - 1, 0);
-  for (int ell = 0; ell < M.num_rows() - 1; ++ell)
+deque<size_t> fork(const Matrix &M) {
+  deque<size_t> frk(M.num_rows() - 1, 0);
+  for (size_t ell = 0; ell < M.num_rows() - 1; ++ell)
     frk[ell] = fork(M[ell], M[ell + 1]);
-  frk.push_front(SENTINEL);
-  frk.push_back(SENTINEL);
+  frk.push_front(size_t(SENTINEL));
+  frk.push_back(size_t(SENTINEL));
   return frk;
 }
 
@@ -1043,7 +1126,7 @@ Formula learnCNFexact(const Matrix &T) {
 // swap the polarity of values in a tuple
 void polswap_row(Row &row) {
   for (size_t i = 0; i < row.size(); ++i) {
-    row[i] = DCARD - row[i];
+    row[i] = DMAX - row[i];
   }
 }
 
