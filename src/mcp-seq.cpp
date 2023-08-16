@@ -1,28 +1,24 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: sequential                                               *
- *      File:    mcp-seq.cpp                                              *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-seq.cpp                                           *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
- *                                                                        *
- * Given several  Boolean matrices  representing the  presence/absence of *
- * attributes in  observations, this software generates  Horn, dual Horn, *
- * or bijunctive formulas from positive and negative examples represented *
- * by these matrices.                                                     *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
  *                                                                        *
  **************************************************************************/
 
@@ -34,10 +30,10 @@
 #include <queue>
 #include <sstream>
 
-#include "bucket.hpp"
+#include "mcp-bucket.hpp"
 #include "mcp-common.hpp"
 #include "mcp-matrix+formula.hpp"
-#include "mesh.hpp"
+#include "mcp-mesh.hpp"
 
 using namespace std;
 

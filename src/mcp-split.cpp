@@ -1,36 +1,33 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: all                                                      *
- *      File:    mcp-split.cpp                                            *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-split.cpp                                         *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
  *                                                                        *
- * Given an input  file with matrices, this procedure splits  it into two *
- * files: one  with vectors to LEARN  the fomula, second one  to CHECK if *
- * the learned formulas correspond to the vectors.                        *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
- *                                                                        *
  **************************************************************************/
 
-#include <iostream>
+#include <algorithm>
 #include <fstream>
+#include <iostream>
+#include <random>
 #include <sstream>
 #include <vector>
-#include <algorithm>
-#include <random>
 
 using namespace std;
 
@@ -49,23 +46,17 @@ vector<int> checklines;
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-void read_arg (int argc, char *argv[]) {	// reads the input parameters
+void read_arg(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "--input"
-	|| arg == "-i") {
+    if (arg == "--input" || arg == "-i") {
       input = argv[++argument];
-    } else if (arg == "--learn"
-	       || arg == "-lrn"
-	       || arg == "-l") {
+    } else if (arg == "--learn" || arg == "-lrn" || arg == "-l") {
       learn_output = argv[++argument];
-    } else if (arg == "--check"
-	       || arg == "-chk"
-	       || arg == "-c") {
+    } else if (arg == "--check" || arg == "-chk" || arg == "-c") {
       check_output = argv[++argument];
-    } else if (arg == "--ratio"
-	       || arg == "-r") {
+    } else if (arg == "--ratio" || arg == "-r") {
       ratio = stoi(argv[++argument]);
     } else
       cerr << "+++ unknown option " << arg << endl;
@@ -73,7 +64,7 @@ void read_arg (int argc, char *argv[]) {	// reads the input parameters
   }
 }
 
-void adjust_and_open () {			// adjusts the input parameters
+void adjust_and_open() { // adjusts the input parameters
   if (input != STDIN) {
     infile.open(input);
     if (infile.is_open())
@@ -114,12 +105,12 @@ void adjust_and_open () {			// adjusts the input parameters
   if (ratio <= 0 || ratio >= 100) {
     cerr << "+++ Ratio must be bigger than 0 and smaller than 100" << endl;
     exit(3);
-  }
-  else if (ratio >= 80)
-    cerr << "+++ Your ratio of " << ratio << "% may not produce the desired results" << endl;
+  } else if (ratio >= 80)
+    cerr << "+++ Your ratio of " << ratio
+         << "% may not produce the desired results" << endl;
 }
 
-void read_input (vector<string> &matlines) {
+void read_input(vector<string> &matlines) {
   int ind_a, ind_b;
   string line;
 
@@ -130,12 +121,12 @@ void read_input (vector<string> &matlines) {
   inds >> ind_a >> ind_b;
 
   if (ind_a == 1) {
-    getline(cin, line); 
+    getline(cin, line);
     learnfile << line << endl;
     checkfile << line << endl;
   }
   if (ind_b == 1) {
-    getline(cin, line); 
+    getline(cin, line);
     learnfile << line << endl;
     checkfile << line << endl;
   }
@@ -144,14 +135,14 @@ void read_input (vector<string> &matlines) {
     matlines.push_back(line);
 }
 
-vector<int> rand_vectors (const vector<string> &matlines) {
+vector<int> rand_vectors(const vector<string> &matlines) {
   random_device rd;
-  static uniform_int_distribution<int> uni_dist(0,matlines.size()-1);
+  static uniform_int_distribution<int> uni_dist(0, matlines.size() - 1);
   static default_random_engine dre(rd());
 
   int rand_card = matlines.size() * (1.0 * ratio / 100.0);
   vector<int> rand_nums;
-  
+
   // Needs to be generated through a loop and checked if every
   // generated value is new
 
@@ -166,12 +157,10 @@ vector<int> rand_vectors (const vector<string> &matlines) {
   return rand_nums;
 }
 
-void distribute (const vector<string> &matlines,
-		 const vector<int> &checklines) {
-  int cl = 0;	// checkline pointer
+void distribute(const vector<string> &matlines, const vector<int> &checklines) {
+  int cl = 0; // checkline pointer
   for (int i = 0; i < matlines.size(); ++i) {
-    if (cl < checklines.size()
-	&& checklines[cl] == i) {
+    if (cl < checklines.size() && checklines[cl] == i) {
       checkfile << matlines[i] << endl;
       cl++;
     } else
@@ -179,23 +168,18 @@ void distribute (const vector<string> &matlines,
   }
 }
 
-void cleanup (const int &matsize, const int &checksize) {
+void cleanup(const int &matsize, const int &checksize) {
   learnfile.close();
   checkfile.close();
 
   cerr << "+++ check ratio = " << ratio << "%" << endl;
-  cerr << "+++ learn " << learn_output << ": "
-       << matsize - checksize
-       << endl;
-  cerr << "+++ check " << check_output << ": "
-       << checksize
-       << endl;
+  cerr << "+++ learn " << learn_output << ": " << matsize - checksize << endl;
+  cerr << "+++ check " << check_output << ": " << checksize << endl;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   read_arg(argc, argv);
   adjust_and_open();
   read_input(matlines);

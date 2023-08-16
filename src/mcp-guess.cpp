@@ -1,84 +1,78 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: all                                                      *
- *      File:    mcp-guess.cpp                                            *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-guess.cpp                                         *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
  *                                                                        *
- * Guess a skeleton of a meta file from a (CSV) data file                 *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
- *                                                                        *
  **************************************************************************/
 
-#include <iostream>
-#include <iomanip>
+#include <algorithm>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <regex>
 #include <sstream>
 #include <vector>
-#include <regex>
-#include <algorithm>
 
-#define STDIN    "STDIN"
-#define STDOUT   "STDOUT"
+#define STDIN "STDIN"
+#define STDOUT "STDOUT"
 
 using namespace std;
 
-float  ENUM_RATIO = 0.01;
-int    ENUM_MAX   = 20;		// 50 80 200 20
-const string QMARK      = "?";
+float ENUM_RATIO = 0.01;
+int ENUM_MAX = 20; // 50 80 200 20
+const string QMARK = "?";
 
-enum item {UNDEF = 0, INT = 1, FLOAT = 2, STRING = 3};
+enum item { UNDEF = 0, INT = 1, FLOAT = 2, STRING = 3 };
 const string item_name[] = {"undef", "int", "float", "string"};
 
 vector<vector<string>> trdata, mydata;
 vector<item> type;
 int row_length = 0;
-int row_count  = 0;
+int row_count = 0;
 vector<int> flength;
 bool errorflag = false;
-bool qflag     = false;
-string id      = "id";
+bool qflag = false;
+string id = "id";
 vector<string> id_names;
 
-string input   = STDIN;
-string name    = "";
-string output  = STDOUT;
+string input = STDIN;
+string name = "";
+string output = STDOUT;
 ifstream infile;
 ifstream namefile;
 ofstream outfile;
 streambuf *backup;
 
-void read_arg (int argc, char *argv[]) {	// reads the input parameters
+void read_arg(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "-i"
-	|| arg == "--input") {
+    if (arg == "-i" || arg == "--input") {
       input = argv[++argument];
-    } else if (arg == "-o"
-	       || arg == "--output") {
+    } else if (arg == "-o" || arg == "--output") {
       output = argv[++argument];
-    } else if (arg == "-n"
-	       || arg == "--names") {
+    } else if (arg == "-n" || arg == "--names") {
       name = argv[++argument];
-    } else if (arg == "-e"
-	       || arg == "--enum") {
+    } else if (arg == "-e" || arg == "--enum") {
       ENUM_MAX = stoi(argv[++argument]);
-    } else if (arg == "-r"
-	       || arg == "--ratio") {
+    } else if (arg == "-r" || arg == "--ratio") {
       ENUM_RATIO = stof(argv[++argument]);
     } else {
       cerr << "+++ argument error: " << arg << endl;
@@ -92,7 +86,7 @@ void read_arg (int argc, char *argv[]) {	// reads the input parameters
   }
 }
 
-void adjust () {
+void adjust() {
   if (ENUM_RATIO < 0.0 || ENUM_RATIO > 1.0) {
     cerr << "*** ENUM_RATIO reset to 0.01" << endl;
     ENUM_RATIO = 0.01;
@@ -104,7 +98,7 @@ void adjust () {
   }
 }
 
-void IO_open () {
+void IO_open() {
   if (input != STDIN) {
     infile.open(input);
     if (infile.is_open()) {
@@ -114,7 +108,7 @@ void IO_open () {
       exit(1);
     }
   }
-  
+
   if (output != STDOUT) {
     outfile.open(output);
     if (outfile.is_open()) {
@@ -135,7 +129,7 @@ void IO_open () {
   }
 }
 
-void IO_close () {
+void IO_close() {
   if (input != STDIN)
     infile.close();
   if (output != STDOUT) {
@@ -146,7 +140,7 @@ void IO_close () {
     namefile.close();
 }
 
-vector<vector<string>> transpose (const vector<vector<string>> &trd) {
+vector<vector<string>> transpose(const vector<vector<string>> &trd) {
   vector<vector<string>> d;
   for (int column = 0; column < trd[0].size(); ++column) {
     vector<string> temp;
@@ -157,8 +151,7 @@ vector<vector<string>> transpose (const vector<vector<string>> &trd) {
   return d;
 }
 
-int main (int argc, char **argv)
-{
+int main(int argc, char **argv) {
   regex empty_pattern("^[ \t]+$", regex::egrep);
   regex comma_scolon("[,;]", regex::egrep);
   string line;
@@ -166,7 +159,7 @@ int main (int argc, char **argv)
   read_arg(argc, argv);
   adjust();
   IO_open();
-  
+
   while (getline(cin, line)) {
     row_count++;
     if (line.empty() || regex_match(line, empty_pattern))
@@ -177,16 +170,16 @@ int main (int argc, char **argv)
     bool in_string = false;
     for (int i = 0; i < line.size(); ++i)
       if (line[i] == '"') {
-	in_string = ! in_string;
-	line1 += " ";
+        in_string = !in_string;
+        line1 += " ";
       } else if (in_string && (line[i] == ' ' || line[i] == '\t'))
-	line1 += "_";
+        line1 += "_";
       else if (in_string && line[i] == '?')
-	line1 += "<>";
+        line1 += "<>";
       else if (in_string && (line[i] == ',' || line[i] == ';'))
-	line1 += ".";
+        line1 += ".";
       else
-	line1 = line1 + line[i];
+        line1 = line1 + line[i];
 
     // elimination of commas and semicolons outside quotes
     string line2 = regex_replace(line1, comma_scolon, " ");
@@ -204,8 +197,8 @@ int main (int argc, char **argv)
     else if (row_length != row.size()) {
       errorflag = true;
       cerr << "+++ item count discrepancy on line " << row_count << endl;
-      cerr << "+++ row length = " << row_length
-	   << ", row size = " << row.size() << endl;
+      cerr << "+++ row length = " << row_length << ", row size = " << row.size()
+           << endl;
     }
   }
 
@@ -225,44 +218,37 @@ int main (int argc, char **argv)
     for (int row = 0; row < mydata[col].size(); ++row) {
       switch (type[col]) {
       case INT:
-	if (regex_match(mydata[col][row], result, float_pattern)
-	    ||
-	    regex_match(mydata[col][row], result, efloat_pattern)) {
-	  flength[col] = max(flength[col], int(result.str(1).length()));
-	  type[col] = FLOAT;
-	} else if (mydata[col][row] != QMARK
-		   &&
-		   !regex_match(mydata[col][row], int_pattern))
-	  type[col] = STRING;
-	else if (mydata[col][row] == QMARK)
-	  qflag = true;
-	break;
-      case  FLOAT:
-	if (mydata[col][row] != QMARK
-	    &&
-	    !regex_match(mydata[col][row], result, int_pattern)
-	    &&
-	    !regex_match(mydata[col][row], result, float_pattern)
-	    &&
-	    !regex_match(mydata[col][row], result, efloat_pattern)
-	    )
-	  type[col] = STRING;
-	else if (mydata[col][row] == QMARK)
-	  qflag = true;
-	break;
-      case  UNDEF:
-	if (regex_match(mydata[col][row], result, int_pattern))
-	  type[col] = INT;
-	else if (regex_match(mydata[col][row], result, float_pattern)
-		 ||
-		 regex_match(mydata[col][row], result, efloat_pattern)) {
-	  flength[col] = max(flength[col], int(result.str(1).length()));
-	  type[col] = FLOAT;
-	} else if(mydata[col][row] != QMARK)
-	  type[col] = STRING;
-	else if (mydata[col][row] == QMARK)
-	  qflag = true;
-	break;
+        if (regex_match(mydata[col][row], result, float_pattern) ||
+            regex_match(mydata[col][row], result, efloat_pattern)) {
+          flength[col] = max(flength[col], int(result.str(1).length()));
+          type[col] = FLOAT;
+        } else if (mydata[col][row] != QMARK &&
+                   !regex_match(mydata[col][row], int_pattern))
+          type[col] = STRING;
+        else if (mydata[col][row] == QMARK)
+          qflag = true;
+        break;
+      case FLOAT:
+        if (mydata[col][row] != QMARK &&
+            !regex_match(mydata[col][row], result, int_pattern) &&
+            !regex_match(mydata[col][row], result, float_pattern) &&
+            !regex_match(mydata[col][row], result, efloat_pattern))
+          type[col] = STRING;
+        else if (mydata[col][row] == QMARK)
+          qflag = true;
+        break;
+      case UNDEF:
+        if (regex_match(mydata[col][row], result, int_pattern))
+          type[col] = INT;
+        else if (regex_match(mydata[col][row], result, float_pattern) ||
+                 regex_match(mydata[col][row], result, efloat_pattern)) {
+          flength[col] = max(flength[col], int(result.str(1).length()));
+          type[col] = FLOAT;
+        } else if (mydata[col][row] != QMARK)
+          type[col] = STRING;
+        else if (mydata[col][row] == QMARK)
+          qflag = true;
+        break;
       }
     }
   }
@@ -271,17 +257,17 @@ int main (int argc, char **argv)
   if (!name.empty())
     while (getline(namefile, line)) {
       if (line.empty() || regex_match(line, empty_pattern))
-	continue;
+        continue;
       int lft = 0;
       while (line[lft] == ' ' || line[lft] == '\t')
-	lft++;
-      int rgt = line.length()-1;
+        lft++;
+      int rgt = line.length() - 1;
       while (line[rgt] == ' ' || line[rgt] == '\t')
-	rgt--;
-      string line1 = line.substr(lft, rgt-lft+1);
+        rgt--;
+      string line1 = line.substr(lft, rgt - lft + 1);
       for (int i = 0; i < line1.length(); ++i)
-	if (line1[i] == ' ' || line1[i] == '\t')
-	  line1[i] = '_';
+        if (line1[i] == ' ' || line1[i] == '\t')
+          line1[i] = '_';
       id_names.push_back(line1);
       id_length = max(id_length, int(line1.length()));
     }
@@ -314,26 +300,26 @@ int main (int argc, char **argv)
     else
       cout << id << left << setw(wide) << col << right;
     cout << " = " << setw(wide) << col << ": ";
-    
+
     switch (type[col]) {
     case INT:
       for (auto r : row)
-	if (r != QMARK)
-	  irow.push_back(stoi(r));
+        if (r != QMARK)
+          irow.push_back(stoi(r));
       sort(irow.begin(), irow.end());
       row.clear();
       for (auto ir : irow)
-	row.push_back(to_string(ir));
+        row.push_back(to_string(ir));
       irow.clear();
       break;
     case FLOAT:
       for (auto r : row)
-	if (r != QMARK)
-	  frow.push_back(stof(r));
+        if (r != QMARK)
+          frow.push_back(stof(r));
       sort(frow.begin(), frow.end());
       row.clear();
       for (auto fr : frow)
-	row.push_back(to_string(fr));
+        row.push_back(to_string(fr));
       frow.clear();
       break;
     case STRING:
@@ -346,9 +332,7 @@ int main (int argc, char **argv)
     int rsz = row.size();
     int rsz1 = rsz - 1;
 
-    bool is_enum = rsz <= ENUM_MAX
-      ||
-      rsz <= (row_count * ENUM_RATIO);
+    bool is_enum = rsz <= ENUM_MAX || rsz <= (row_count * ENUM_RATIO);
     if (rsz == 2)
       cout << "bool ";
     else if (is_enum && type[col] != FLOAT)
@@ -358,27 +342,26 @@ int main (int argc, char **argv)
     if (is_enum && type[col] != FLOAT) {
       cout << "[";
       for (int i = 0; i < rsz1; ++i)
-	cout << row[i] << " ";
-      cout << row[rsz-1] << "]";
+        cout << row[i] << " ";
+      cout << row[rsz - 1] << "]";
     } else if (type[col] == FLOAT) {
-      float r0f   = stof(row[0]);
+      float r0f = stof(row[0]);
       float rsz1f = stof(row[rsz1]);
       cout << showpoint;
       cout << setprecision(flength[col] + to_string((int)r0f).length());
       cout << r0f << " ";
       cout << setprecision(flength[col] + to_string((int)rsz1f).length());
-      cout << rsz1f
-	   << noshowpoint;
+      cout << rsz1f << noshowpoint;
     } else
       cout << row[0] << " " << row[rsz1];
     cout << ";\t# card " << rsz;
     bool is_cons = type[col] == INT;
     if (is_cons)
       for (int i = 1; i < rsz; ++i)
-	if (stoi(row[i]) != stoi(row[i-1])+1) {
-	  is_cons = false;
-	  break;
-	}
+        if (stoi(row[i]) != stoi(row[i - 1]) + 1) {
+          is_cons = false;
+          break;
+        }
     if (is_cons)
       cout << " consecutive";
     cout << endl;

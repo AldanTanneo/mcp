@@ -1,42 +1,41 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: all                                                      *
- *      File:    mcp-sparse.cpp                                           *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-sparse.cpp                                        *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
  *                                                                        *
- * Transform files from sparse format to full format                      *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
- *                                                                        *
  **************************************************************************/
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
 #include "mcp-matrix+formula.hpp"
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
 
 using namespace std;
 
-#define STDIN    "STDIN"
-#define STDOUT   "STDOUT"
+#define STDIN "STDIN"
+#define STDOUT "STDOUT"
 
-string input   = STDIN;
-string output  = STDOUT;
-string dflt    = "0";
+string input = STDIN;
+string output = STDOUT;
+string dflt = "0";
 
 ifstream infile;
 ifstream metafile;
@@ -56,22 +55,19 @@ bool isblank(const string &id) {
   return false;
 }
 
-void read_arg  (int argc, char *argv[]) {	// reads the input parameters
+void read_arg(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "-i"
-	|| arg == "--input") {
+    if (arg == "-i" || arg == "--input") {
       input = argv[++argument];
-    } else if (arg == "-o"
-	       || arg == "--output") {
+    } else if (arg == "-o" || arg == "--output") {
       output = argv[++argument];
-    } else if (arg == "-d"
-	       || arg == "--default") {
+    } else if (arg == "-d" || arg == "--default") {
       dflt = argv[++argument];
     } else {
-    cerr << "+++ argument error: " << arg << " " << argv[argument] << endl;
-    exit(1);
+      cerr << "+++ argument error: " << arg << " " << argv[argument] << endl;
+      exit(1);
     }
     ++argument;
   }
@@ -85,7 +81,7 @@ void read_arg  (int argc, char *argv[]) {	// reads the input parameters
   }
 }
 
-void IO_open () {
+void IO_open() {
   if (input != STDIN) {
     infile.open(input);
     if (infile.is_open()) {
@@ -95,7 +91,7 @@ void IO_open () {
       exit(1);
     }
   }
-  
+
   if (output != STDOUT) {
     outfile.open(output);
     if (outfile.is_open()) {
@@ -108,7 +104,7 @@ void IO_open () {
   }
 }
 
-void IO_close () {
+void IO_close() {
   if (input != STDIN)
     infile.close();
   if (output != STDOUT) {
@@ -117,7 +113,7 @@ void IO_close () {
   }
 }
 
-void I_reopen () {
+void I_reopen() {
   if (input != STDIN) {
     infile.close();
     infile.open(input);
@@ -130,14 +126,14 @@ void I_reopen () {
   }
 }
 
-void spread (const string &line) {
+void spread(const string &line) {
   vector<string> parts = split(line, " \t");
   cout << parts[0];
 
   int ptr = 1;
   for (int i = 1; i < parts.size(); ++i) {
     vector<string> pair = split(parts[i], ":");
-    
+
     while (ptr < stoi(pair[0])) {
       cout << " " << dflt;
       ptr++;
@@ -154,8 +150,7 @@ void spread (const string &line) {
 
 //////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   string line;
   vector<string> sparse_data;
 
@@ -167,7 +162,7 @@ int main(int argc, char **argv)
       sparse_data.push_back(line);
 
     vector<string> parts = split(line, " \t");
-    vector<string> last = split(parts[parts.size()-1], ":");
+    vector<string> last = split(parts[parts.size() - 1], ":");
     max_idx = max(max_idx, stoi(last[0]));
   }
 
@@ -179,7 +174,7 @@ int main(int argc, char **argv)
   else
     while (getline(cin, line))
       spread(line);
-  
+
   IO_close();
   return 0;
 }

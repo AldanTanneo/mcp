@@ -20,18 +20,11 @@
 ##*                                                                        *
 ##*      Copyright (c) 2019 - 2023                                         *
 ##*                                                                        *
-##* Given several  Boolean matrices  representing the  presence/absence of *
-##* attributes in  observations, this software generates  Horn, dual Horn, *
-##* or bijunctive formulas from positive and negative examples represented *
-##* by these matrices.                                                     *
-##*                                                                        *
-##* This software has been created within the ACCA Project.                *
-##*                                                                        *
-##*                                                                        *
 ##**************************************************************************
 
 BIN   := ../bin
-FLAGS := -std=c++14 -Wall -Werror -Wfatal-errors -Wconversion -Os -fsanitize=address -fsanitize=undefined
+FLAGS := -std=c++14 -O4 
+# -Wall -Werror -Wfatal-errors -Wconversion -Os -fsanitize=address -fsanitize=undefined
 CXX   := g++ $(FLAGS)
 
 .PHONY: compile compile-no-mpi seq export clean scratch uniq
@@ -51,19 +44,19 @@ mcp-matrix+formula-seq.o: mcp-matrix+formula.cpp mcp-matrix+formula.hpp
 mcp-common-seq.o: mcp-common.cpp mcp-common.hpp mcp-matrix+formula.hpp
 	$(CXX) -c -o $@ mcp-common.cpp
 
-bucket-seq.o: bucket.cpp bucket.hpp mcp-matrix+formula.hpp
-	$(CXX) -c -o $@ bucket.cpp
+mcp-bucket-seq.o: mcp-bucket.cpp mcp-bucket.hpp mcp-matrix+formula.hpp
+	$(CXX) -c -o $@ mcp-bucket.cpp
 
-mesh-seq.o: mesh.cpp mesh.hpp bucket.hpp mcp-matrix+formula.hpp
-	$(CXX) -c -o $@ mesh.cpp
+mcp-mesh-seq.o: mcp-mesh.cpp mcp-mesh.hpp mcp-bucket.hpp mcp-matrix+formula.hpp
+	$(CXX) -c -o $@ mcp-mesh.cpp
 
 #---------------------------------------------------------------------------------------------------
 
-seq: mcp-matrix+formula-seq.o mcp-common-seq.o mcp-seq.o mesh-seq.o bucket-seq.o
-	$(CXX) -o $(BIN)/mcp-seq mcp-seq.o mcp-common-seq.o mcp-matrix+formula-seq.o bucket-seq.o mesh-seq.o
+seq: mcp-matrix+formula-seq.o mcp-common-seq.o mcp-seq.o mcp-mesh-seq.o mcp-bucket-seq.o
+	$(CXX) -o $(BIN)/mcp-seq mcp-seq.o mcp-common-seq.o mcp-matrix+formula-seq.o mcp-bucket-seq.o mcp-mesh-seq.o
 
 
-mcp-seq.o: mcp-seq.cpp bucket.hpp mcp-matrix+formula.hpp mcp-common.hpp mesh.hpp
+mcp-seq.o: mcp-seq.cpp mcp-bucket.hpp mcp-matrix+formula.hpp mcp-common.hpp mcp-mesh.hpp
 	$(CXX) -c -o mcp-seq.o mcp-seq.cpp
 
 #---------------------------------------------------------------------------------------------------

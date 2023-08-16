@@ -1,10 +1,34 @@
+/**************************************************************************
+ *                                                                        *
+ *                                                                        *
+ *	       Multiple Characterization Problem (MCP)                        *
+ *                                                                        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
+ *                                                                        *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
+ *                                                                        *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-bucket.cpp                                        *
+ *                                                                        *
+ *      Copyright (c) 2019 - 2023                                         *
+ *                                                                        *
+ **************************************************************************/
 
 #include "mcp-common.hpp"
 #include "mcp-matrix+formula.hpp"
 
+// alias before importing bucket
 using GeneralClause = Clause;
 
-#include "bucket.hpp"
+#include "mcp-bucket.hpp"
 
 #include <algorithm>
 #include <iostream>

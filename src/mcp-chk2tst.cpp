@@ -1,62 +1,54 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: all                                                      *
- *      File:    mcp-chk2tst                                              *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-chk2tst.cpp                                       *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
  *                                                                        *
- * Take a check file *.chk and transforms it into a test file             *
- * *.tst. The test file contains the check file without the leading       *
- * group identifiers. This module is a technical preparation support      *
- * for mcp-predict.                                                       *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
- *                                                                        *
  **************************************************************************/
 
-
-#include <iostream>
+#include "mcp-matrix+formula.hpp"
+#include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <vector>
-#include <algorithm>
-#include "mcp-matrix+formula.hpp"
 
 using namespace std;
 
-const string STDIN  = "STDIN";
+const string STDIN = "STDIN";
 const string STDOUT = "STDOUT";
 
-string input  = STDIN;
+string input = STDIN;
 string output = STDOUT;
 ifstream infile;
 ofstream outfile;
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-void read_arg (int argc, char *argv[]) {	// reads the input parameters
+void read_arg(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "--input"
-	|| arg == "-i") {
+    if (arg == "--input" || arg == "-i") {
       input = argv[++argument];
-    } else if (arg == "--output"
-	       || arg == "-o"
-	       || arg == "--test"
-	       || arg == "--tst") {
+    } else if (arg == "--output" || arg == "-o" || arg == "--test" ||
+               arg == "--tst") {
       output = argv[++argument];
     } else
       cerr << "+++ unknown option " << arg << endl;
@@ -64,7 +56,7 @@ void read_arg (int argc, char *argv[]) {	// reads the input parameters
   }
 }
 
-void adjust_and_open () {
+void adjust_and_open() {
   if (input != STDIN) {
     infile.open(input);
     if (infile.is_open())
@@ -74,12 +66,12 @@ void adjust_and_open () {
       exit(2);
     }
   }
-  
+
   if (input != STDIN && output == STDOUT) {
     string::size_type pos = input.rfind('.');
     output = (pos == string::npos ? input : input.substr(0, pos)) + ".tst";
   }
-  
+
   if (output != STDOUT) {
     outfile.open(output);
     if (outfile.is_open())
@@ -91,7 +83,7 @@ void adjust_and_open () {
   }
 }
 
-void matrix2tst () {
+void matrix2tst() {
   int ind_a, ind_b;
   string line;
 
@@ -125,8 +117,7 @@ void matrix2tst () {
 
 //////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   read_arg(argc, argv);
   adjust_and_open();
   matrix2tst();

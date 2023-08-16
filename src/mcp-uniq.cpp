@@ -1,44 +1,42 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                    *
+ *	       Multiple Characterization Problem (MCP)                        *
  *                                                                        *
- *	Author:   Miki Hermann                                            *
- *	e-mail:   hermann@lix.polytechnique.fr                            *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France        *
+ *	Author:   Miki Hermann                                                *
+ *	e-mail:   hermann@lix.polytechnique.fr                                *
+ *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
  *                                                                        *
- *	Author: Gernot Salzer                                             *
- *	e-mail: gernot.salzer@tuwien.ac.at                                *
- *	Address: Technische Universitaet Wien, Vienna, Austria            *
+ *	Author:   Gernot Salzer                                               *
+ *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
+ *	Address:  Technische Universitaet Wien, Vienna, Austria               *
  *                                                                        *
- *	Version: all                                                      *
- *      File:    mcp-uniq.cpp                                             *
+ * Author:   César Sagaert                                                *
+ * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
+ * Address:  ENSTA Paris, Palaiseau, France                               *
+ *                                                                        *
+ *	Version: all                                                          *
+ *     File:    src/mcp-uniq.cpp                                          *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
  *                                                                        *
- *  Takes a matrix and deletes rows with same values but different        *
- *  leading group identifier. Technical support ofter mcp-trans.          *
- *                                                                        *
- * This software has been created within the ACCA Project.                *
- *                                                                        *
- *                                                                        *
  **************************************************************************/
 
-#include <iostream>
+#include "mcp-matrix+formula.hpp"
 #include <fstream>
-#include <sstream>
-#include <vector>
+#include <functional>
+#include <iostream>
 #include <map>
 #include <set>
-#include <functional>
-#include "mcp-matrix+formula.hpp"
+#include <sstream>
+#include <vector>
 
 using namespace std;
 
-const string STDIN  = "STDIN";
+const string STDIN = "STDIN";
 const string STDOUT = "STDOUT";
 
-string input  = STDIN;
+string input = STDIN;
 string output = STDOUT;
 ifstream infile;
 ofstream outfile;
@@ -47,29 +45,23 @@ bool use_hash = true;
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-void read_args(int argc, char *argv[]) {	// reads the input parameters
+void read_args(int argc, char *argv[]) { // reads the input parameters
   int argument = 1;
   while (argument < argc) {
     string arg = argv[argument];
-    if (arg == "--input"
-	|| arg == "-i") {
+    if (arg == "--input" || arg == "-i") {
       input = argv[++argument];
-    } else if (arg == "--output"
-    	       || arg == "-o") {
+    } else if (arg == "--output" || arg == "-o") {
       output = argv[++argument];
     } else if (arg == "--hash") {
       string hash_par = argv[++argument];
-      if (hash_par == "yes"
-	  || hash_par == "y"
-	  || hash_par == "1")
-	use_hash = true;
-      else if (hash_par == "no"
-	       || hash_par == "n"
-	       || hash_par == "0")
-	use_hash = false;
+      if (hash_par == "yes" || hash_par == "y" || hash_par == "1")
+        use_hash = true;
+      else if (hash_par == "no" || hash_par == "n" || hash_par == "0")
+        use_hash = false;
       else {
-	cerr << "+++ argument error: " << arg << " " << hash_par << endl;
-	exit(1);
+        cerr << "+++ argument error: " << arg << " " << hash_par << endl;
+        exit(1);
       }
     } else
       cerr << "+++ unknown option " << arg << endl;
@@ -77,7 +69,7 @@ void read_args(int argc, char *argv[]) {	// reads the input parameters
   }
 }
 
-void IO_open () {
+void IO_open() {
   if (input != STDIN) {
     infile.open(input);
     if (infile.is_open())
@@ -92,7 +84,7 @@ void IO_open () {
     string::size_type pos = input.rfind('.');
     output = (pos == string::npos ? input : input.substr(0, pos)) + ".unq";
   }
-  
+
   if (output != STDOUT) {
     outfile.open(output);
     if (outfile.is_open())
@@ -104,14 +96,14 @@ void IO_open () {
   }
 }
 
-void IO_close () {
+void IO_close() {
   if (input != STDIN)
     infile.close();
   if (output != STDOUT)
     outfile.close();
 }
 
-void header () {
+void header() {
   int ind_a, ind_b;
   string line;
 
@@ -129,10 +121,10 @@ void header () {
   }
 }
 
-void matrix () {
+void matrix() {
   string line;
   int numline = SENTINEL;
-  
+
   vector<string> line_tab;
   vector<string> group_tab;
   map<size_t, set<int>> hash_tab;
@@ -155,8 +147,7 @@ void matrix () {
 
   cerr << "+++ " << line_tab.size() << " rows read" << endl;
   cerr << "+++ (no)hash table size = "
-       << (use_hash ? hash_tab.size() : nohash_tab.size())
-       << endl;
+       << (use_hash ? hash_tab.size() : nohash_tab.size()) << endl;
   vector<bool> row_del_indicator(line_tab.size(), false);
 
   int del_num = 0;
@@ -164,30 +155,30 @@ void matrix () {
     for (auto it = hash_tab.begin(); it != hash_tab.end(); ++it) {
       auto item = it->second;
       if (item.size() > 1) {
-	set<string> grp;
-	for (auto it2 = item.begin(); it2 != item.end(); ++it2)
-	  grp.insert(group_tab[*it2]);
-	if (grp.size() > 1) {
-	  for (auto it2 = item.begin(); it2 != item.end(); ++it2) {
-	    row_del_indicator[*it2] = true;
-	    del_num++;
-	  }
-	}
+        set<string> grp;
+        for (auto it2 = item.begin(); it2 != item.end(); ++it2)
+          grp.insert(group_tab[*it2]);
+        if (grp.size() > 1) {
+          for (auto it2 = item.begin(); it2 != item.end(); ++it2) {
+            row_del_indicator[*it2] = true;
+            del_num++;
+          }
+        }
       }
     }
   } else {
     for (auto it = nohash_tab.begin(); it != nohash_tab.end(); ++it) {
       auto item = it->second;
       if (item.size() > 1) {
-	set<string> grp;
-	for (auto it2 = item.begin(); it2 != item.end(); ++it2)
-	  grp.insert(group_tab[*it2]);
-	if (grp.size() > 1) {
-	  for (auto it2 = item.begin(); it2 != item.end(); ++it2) {
-	    row_del_indicator[*it2] = true;
-	    del_num++;
-	  }
-	}
+        set<string> grp;
+        for (auto it2 = item.begin(); it2 != item.end(); ++it2)
+          grp.insert(group_tab[*it2]);
+        if (grp.size() > 1) {
+          for (auto it2 = item.begin(); it2 != item.end(); ++it2) {
+            row_del_indicator[*it2] = true;
+            del_num++;
+          }
+        }
       }
     }
   }
@@ -204,8 +195,7 @@ void matrix () {
 
 //////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   read_args(argc, argv);
   IO_open();
   header();
