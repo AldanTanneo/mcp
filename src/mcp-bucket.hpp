@@ -28,6 +28,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <array>
 
 #include "mcp-matrix+formula.hpp"
 
