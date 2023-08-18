@@ -491,8 +491,10 @@ int numlit(const Clause &clause) {
   for (Literal lit : clause)
     switch (lit.sign) {
     case lneg:
+      ++i;
+      break;
     case lpos:
-      i++;
+      ++i;
       break;
     case lboth:
       i += 2;
