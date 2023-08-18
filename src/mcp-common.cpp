@@ -605,24 +605,21 @@ Formula unitres(const Formula &formula) { // unit resolution
     for (size_t j = 0; j < clauses.size(); j++) {
       Clause &clause = clauses[j];
 
-      // x >= d & (x >= d' + c), && d >= d' => x >= d
       if (unit[index].sign == lpos && clause[index].sign & lpos &&
           unit[index].pval >= clause[index].pval) {
+        // x >= d & (x >= d' + c), && d >= d' => x >= d
         clause = Clause();
-      }
-      // x <= d & (x <= d' + c), && d <= d' => x <= d
-      if (unit[index].sign == lneg && clause[index].sign & lneg &&
-          unit[index].nval <= clause[index].nval) {
+      } else if (unit[index].sign == lneg && clause[index].sign & lneg &&
+                 unit[index].nval <= clause[index].nval) {
+        // x <= d & (x <= d' + c), && d <= d' => x <= d
         clause = Clause();
-      }
-      // x >= p & (x <= n + c), && p > n => x >= p & c
-      if (unit[index].sign == lpos && clause[index].sign & lneg &&
-          unit[index].pval > clause[index].nval) {
+      } else if (unit[index].sign == lpos && clause[index].sign & lneg &&
+                 unit[index].pval > clause[index].nval) {
+        // x >= p & (x <= n + c), && p > n => x >= p & c
         clause[index].sign = Sign(clause[index].sign ^ lneg);
-      }
-      // x <= n & (x >= p + c), && n < p => x <= n & c
-      if (unit[index].sign == lneg && clause[index].sign & lpos &&
-          unit[index].nval < clause[index].pval) {
+      } else if (unit[index].sign == lneg && clause[index].sign & lpos &&
+                 unit[index].nval < clause[index].pval) {
+        // x <= n & (x >= p + c), && n < p => x <= n & c
         clause[index].sign = Sign(clause[index].sign ^ lpos);
       }
     }
@@ -683,10 +680,18 @@ Formula unitres(const Formula &formula) { // unit resolution
 bool subsumes(const Clause &cla, const Clause &clb) {
   // does clause cla subsume clause clb ?
   // cla must be smaller than clb
-  for (size_t i = 0; i < cla.size(); ++i)
-    if ((cla[i].sign & clb[i].sign & lneg && cla[i].nval < clb[i].nval) ||
-        (cla[i].sign & clb[i].sign & lpos && cla[i].pval > clb[i].pval))
-      return false;
+  for (size_t i = 0; i < cla.size(); ++i) {
+    if (cla[i].sign != lnone) {
+      if (cla[i].sign & lneg && !(clb[i].sign & lneg))
+        return false;
+      if (cla[i].sign & lneg && clb[i].sign & lneg && cla[i].nval > clb[i].nval)
+        return false;
+      if (cla[i].sign & lpos && !(clb[i].sign & lpos))
+        return false;
+      if (cla[i].sign & lpos && clb[i].sign & lpos && cla[i].pval < clb[i].pval)
+        return false;
+    }
+  }
   return true;
 }
 
