@@ -36,6 +36,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cstdint>
 
 #define GLOBAL_VERSION "1.05d-mekong-"
 
