@@ -600,7 +600,7 @@ Formula unitres(const Formula &formula) { // unit resolution
     int index = 0;
     while (unit[index].sign == lnone)
       index++;
-    for (int j = 0; j < clauses.size(); j++) {
+    for (size_t j = 0; j < clauses.size(); j++) {
       Clause &clause = clauses[j];
 
       // x >= d & (x >= d' + c), && d >= d' => x >= d
@@ -646,14 +646,14 @@ Formula unitres(const Formula &formula) { // unit resolution
   resUnits.erase(last1, resUnits.end());
 
   // test if there are no two unit clauses having literals of opposite parity
-  int ru_bound = resUnits.size();
-  for (int i = 0; i < ru_bound - 1; ++i) {
+  size_t ru_bound = resUnits.size();
+  for (size_t i = 0; i < ru_bound - 1; ++i) {
     Clause unit_i = resUnits[i];
-    int index = 0;
+    size_t index = 0;
     while (index < unit_i.size() && unit_i[index].sign == lnone)
       index++;
     if (index < ru_bound) {
-      for (int j = i + 1; j < ru_bound; ++j) {
+      for (size_t j = i + 1; j < ru_bound; ++j) {
         Clause unit_j = resUnits[j];
         if ((unit_i[index].sign == lpos && unit_j[index].sign == lneg &&
              unit_i[index].pval > unit_j[index].nval) ||

@@ -23,8 +23,8 @@
 ##**************************************************************************
 
 BIN   := ../bin
-FLAGS := -std=c++14 -O4 -flto -fopenmp
-# -Wall -Werror -Wfatal-errors -Wconversion -Os -fsanitize=address -fsanitize=undefined
+FLAGS := -std=c++14 -O4 -flto -fopenmp -Wall -Werror -Wfatal-errors
+# -Wconversion -Os -fsanitize=address -fsanitize=undefined
 CXX   := g++ $(FLAGS)
 
 .PHONY: compile compile-no-mpi seq export clean scratch uniq
