@@ -649,26 +649,27 @@ Formula unitres(const Formula &formula) { // unit resolution
 
   // test if there are no two unit clauses having literals of opposite parity
   size_t ru_bound = resUnits.size();
-  for (size_t i = 0; i < ru_bound - 1; ++i) {
-    Clause unit_i = resUnits[i];
-    size_t index = 0;
-    while (index < unit_i.size() && unit_i[index].sign == lnone)
-      index++;
-    if (index < ru_bound) {
-      for (size_t j = i + 1; j < ru_bound; ++j) {
-        Clause unit_j = resUnits[j];
-        if ((unit_i[index].sign == lpos && unit_j[index].sign == lneg &&
-             unit_i[index].pval > unit_j[index].nval) ||
-            (unit_i[index].sign == lneg && unit_j[index].sign == lpos &&
-             unit_i[index].nval < unit_j[index].pval)) {
-          Clause emptyClause(unit_i.size(), Literal::none());
-          Formula emptyFormula;
-          emptyFormula.push_back(emptyClause);
-          return emptyFormula;
+  if (ru_bound > 1)
+    for (size_t i = 0; i < ru_bound - 1; ++i) {
+      Clause &unit_i = resUnits[i];
+      size_t index = 0;
+      while (index < unit_i.size() && unit_i[index].sign == lnone)
+        index++;
+      if (index < ru_bound) {
+        for (size_t j = i + 1; j < ru_bound; ++j) {
+          Clause &unit_j = resUnits[j];
+          if ((unit_i[index].sign == lpos && unit_j[index].sign == lneg &&
+               unit_i[index].pval > unit_j[index].nval) ||
+              (unit_i[index].sign == lneg && unit_j[index].sign == lpos &&
+               unit_i[index].nval < unit_j[index].pval)) {
+            Clause emptyClause(unit_i.size(), Literal::none());
+            Formula emptyFormula;
+            emptyFormula.push_back(emptyClause);
+            return emptyFormula;
+          }
         }
       }
     }
-  }
 
   clauses.insert(clauses.end(), resUnits.begin(), resUnits.end());
   // sort(clauses.begin(), clauses.end()), cmp_numlit;
