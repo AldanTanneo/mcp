@@ -807,8 +807,7 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
 
   // perform set cover
   while (!R.empty()) {
-    cerr << "\r" << R.size();
-    flush(cerr);
+    cerr << "\r" << R.size() << flush;
 
     // How many tuples does the clause falsify (intersect)?
     unordered_map<reference_wrapper<const Clause>, size_t, std::hash<Clause>>
@@ -872,6 +871,8 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
       }
     }
   }
+
+  cerr << "\r" << flush;
 
   // sort(selected.begin(), selected.end(), cmp_numlit);
   sort_formula(selected, 0, selected.size() - 1);
