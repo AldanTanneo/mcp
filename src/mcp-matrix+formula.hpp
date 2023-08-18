@@ -1,21 +1,21 @@
 /**************************************************************************
  *                                                                        *
  *                                                                        *
- *	       Multiple Characterization Problem (MCP)                        *
+ *        Multiple Characterization Problem (MCP)                         *
  *                                                                        *
- *	Author:   Miki Hermann                                                *
- *	e-mail:   hermann@lix.polytechnique.fr                                *
- *	Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France            *
+ * Author:   Miki Hermann                                                 *
+ * e-mail:   hermann@lix.polytechnique.fr                                 *
+ * Address:  LIX (CNRS UMR 7161), Ecole Polytechnique, France             *
  *                                                                        *
- *	Author:   Gernot Salzer                                               *
- *	e-mail:   gernot.salzer@tuwien.ac.at                                  *
- *	Address:  Technische Universitaet Wien, Vienna, Austria               *
+ * Author:   Gernot Salzer                                                *
+ * e-mail:   gernot.salzer@tuwien.ac.at                                   *
+ * Address:  Technische Universitaet Wien, Vienna, Austria                *
  *                                                                        *
  * Author:   César Sagaert                                                *
  * e-mail:   cesar.sagaert@ensta-paris.fr                                 *
  * Address:  ENSTA Paris, Palaiseau, France                               *
  *                                                                        *
- *	Version: all                                                          *
+ * Version: all                                                           *
  *     File:    src/mcp-matrix+formula.hpp                                *
  *                                                                        *
  *      Copyright (c) 2019 - 2023                                         *
@@ -25,6 +25,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <iostream>
@@ -36,7 +37,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <cstdint>
 
 #define GLOBAL_VERSION "1.05d-mekong-"
 
