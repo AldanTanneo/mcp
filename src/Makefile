@@ -23,8 +23,8 @@
 ##**************************************************************************
 
 BIN   := ../bin
-RELEASE_FLAGS := -std=c++14 -O4 -flto -fopenmp -Wall -Werror -Wfatal-errors 
-DEBUG_FLAGS := -std=c++14 -O0 -g -fopenmp -Wall -Werror -Wfatal-errors -fsanitize=address -fsanitize=undefined
+RELEASE_FLAGS := -std=c++14 -O3 -flto -fopenmp -Wall -Werror -Wfatal-errors
+DEBUG_FLAGS := -std=c++14 -O0 -g -fopenmp -Wall -Werror -Wfatal-errors -fsanitize=undefined -fsanitize=address
 CXX   := g++ $(RELEASE_FLAGS)
 
 .PHONY: compile compile-no-mpi seq export clean scratch uniq
@@ -52,7 +52,9 @@ mcp-mesh-seq.o: mcp-mesh.cpp mcp-mesh.hpp mcp-bucket.hpp mcp-matrix+formula.hpp
 
 #---------------------------------------------------------------------------------------------------
 
-seq: mcp-matrix+formula-seq.o mcp-common-seq.o mcp-seq.o mcp-mesh-seq.o mcp-bucket-seq.o
+seq: $(BIN)/mcp-seq
+
+$(BIN)/mcp-seq: mcp-matrix+formula-seq.o mcp-common-seq.o mcp-seq.o mcp-mesh-seq.o mcp-bucket-seq.o
 	$(CXX) -o $(BIN)/mcp-seq mcp-seq.o mcp-common-seq.o mcp-matrix+formula-seq.o mcp-bucket-seq.o mcp-mesh-seq.o
 
 
