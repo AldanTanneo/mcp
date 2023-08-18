@@ -357,7 +357,7 @@ string clause2dimacs(const vector<size_t> &names, const Clause &clause) {
       output += var + ":" + to_string(clause[lit].pval) + " ";
     }
     if (clause[lit].sign & lneg) {
-      output += var + ":" + to_string(clause[lit].nval) + " ";
+      output += "-" + var + ":" + to_string(clause[lit].nval) + " ";
     }
   }
   output += "0";
@@ -619,8 +619,9 @@ void read_formula(vector<size_t> &names, Formula &formula) {
           exit(2);
         }
 
-        uintmax_t val = parts.size() == 2 ? stoul(parts[1]) : (var < 0 ? 0 : 1);
-        if (val > (uintmax_t)DMAX) {
+        unsigned long long val =
+            parts.size() == 2 ? stoull(parts[1]) : (var < 0 ? 0 : 1);
+        if (val > (unsigned long long)(std::numeric_limits<integer>::max())) {
           throw out_of_range(parts[1]);
         }
 
