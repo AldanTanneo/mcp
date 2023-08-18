@@ -23,7 +23,7 @@
 ##**************************************************************************
 
 BIN   := ../bin
-FLAGS := -std=c++14 -O4 
+FLAGS := -std=c++14 -O4 -flto -fopenmp
 # -Wall -Werror -Wfatal-errors -Wconversion -Os -fsanitize=address -fsanitize=undefined
 CXX   := g++ $(FLAGS)
 

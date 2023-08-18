@@ -38,6 +38,8 @@
 #include <string>
 #include <unordered_set>
 
+#include <omp.h>
+
 using namespace std;
 
 // string version = GLOBAL_VERSION;
@@ -282,7 +284,8 @@ bool InHornClosure(const RowView &row, const Matrix &M) {
 }
 */
 
-bool SHCPsolvable(const Matrix &T, const Matrix &F) {
+// is the intersection of F and of the Horn closure of T empty?
+template <typename M> bool SHCPsolvable(const M &T, const M &F) {
   for (size_t i = 0; i < F.num_rows(); ++i) {
     if (InHornClosure(F[i], T))
       return false;
@@ -290,13 +293,12 @@ bool SHCPsolvable(const Matrix &T, const Matrix &F) {
   return true;
 }
 
-// is the intersection of F and of the Horn closure of T empty?
+bool SHCPsolvable(const Matrix &T, const Matrix &F) {
+  return SHCPsolvable<Matrix>(T, F);
+}
+
 bool SHCPsolvable(const MatrixMask &T, const MatrixMask &F) {
-  for (size_t i = 0; i < F.num_rows(); ++i) {
-    if (InHornClosure(F[i], T))
-      return false;
-  }
-  return true;
+  return SHCPsolvable<MatrixMask>(T, F);
 }
 
 //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -581,77 +583,96 @@ Row minHorn(const Matrix &M) {
   return mh;
 }
 
-// x >= d & (x >= d' + c), && d >= d' => x >= d
-// x >= d & (x <= d' + c), && d > d' => x >= d + c
-
-// x <= d & (x <= d' + c), && d <= d' => x <= d
-// x <= d & (x >= d' + c), && d < d' => x <= d + c
 Formula unitres(const Formula &formula) { // unit resolution
   Formula units;
   Formula clauses;
-  /*
-    for (Clause cl : formula)
-      if (numlit(cl) == 1)
-        units.push_back(cl);
-      else
-        clauses.push_back(cl);
 
-    Formula resUnits = units;
-    while (!units.empty() && !clauses.empty()) {
-      Clause &unit = units.front();
-      units.pop_front();
-      int index = 0;
-      while (unit[index].sign == lnone)
-        index++;
-      for (int j = 0; j < clauses.size(); j++) {
-        Clause clause = clauses[j];
-        if ((unit[index] == lpos && clause[index] == lneg) ||
-            (unit[index] == lneg && clause[index] == lpos))
-          clauses[j][index] = lnone;
+  for (Clause cl : formula)
+    if (numlit(cl) == 1)
+      units.push_back(cl);
+    else
+      clauses.push_back(cl);
+
+  Formula resUnits = units;
+  while (!units.empty() && !clauses.empty()) {
+    Clause unit = units.front();
+    units.pop_front();
+    int index = 0;
+    while (unit[index].sign == lnone)
+      index++;
+    for (int j = 0; j < clauses.size(); j++) {
+      Clause &clause = clauses[j];
+
+      // x >= d & (x >= d' + c), && d >= d' => x >= d
+      if (unit[index].sign == lpos && clause[index].sign & lpos &&
+          unit[index].pval >= clause[index].pval) {
+        clause = Clause();
       }
-
-      auto it = clauses.begin();
-      while (it != clauses.end())
-        if (numlit(*it) == 1) {
-          units.push_back(*it);
-          resUnits.push_back(*it);
-          it = clauses.erase(it);
-        } else
-          ++it;
+      // x <= d & (x <= d' + c), && d <= d' => x <= d
+      if (unit[index].sign == lneg && clause[index].sign & lneg &&
+          unit[index].nval <= clause[index].nval) {
+        clause = Clause();
+      }
+      // x >= p & (x <= n + c), && p > n => x >= p & c
+      if (unit[index].sign == lpos && clause[index].sign & lneg &&
+          unit[index].pval > clause[index].nval) {
+        clause[index].sign = Sign(clause[index].sign ^ lneg);
+      }
+      // x <= n & (x >= p + c), && n < p => x <= n & c
+      if (unit[index].sign == lneg && clause[index].sign & lpos &&
+          unit[index].nval < clause[index].pval) {
+        clause[index].sign = Sign(clause[index].sign ^ lpos);
+      }
     }
 
-    // sort(resUnits.begin(), resUnits.end());
-    sort_formula(resUnits, 0, resUnits.size() - 1);
-    auto last1 = unique(resUnits.begin(), resUnits.end());
-    resUnits.erase(last1, resUnits.end());
+    auto it = clauses.begin();
+    while (it != clauses.end()) {
+      int num = numlit(*it);
+      if (num == 0) {
+        it = clauses.erase(it);
+      } else if (num == 1) {
+        units.push_back(*it);
+        resUnits.push_back(*it);
+        it = clauses.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
 
-    // test if there are no two unit clauses having literals of opposite parity
-    int ru_bound = resUnits.size();
-    for (int i = 0; i < ru_bound - 1; ++i) {
-      Clause unit_i = resUnits[i];
-      int index = 0;
-      while (index < unit_i.size() && unit_i[index] == lnone)
-        index++;
-      if (index < ru_bound) {
-        for (int j = i + 1; j < ru_bound; ++j) {
-          Clause unit_j = resUnits[j];
-          if (unit_i[index] == lpos && unit_j[index] == lneg ||
-              unit_i[index] == lneg && unit_j[index] == lpos) {
-            Clause emptyClause(unit_i.size(), lnone);
-            Formula emptyFormula;
-            emptyFormula.push_back(emptyClause);
-            return emptyFormula;
-          }
+  // sort(resUnits.begin(), resUnits.end());
+  sort_formula(resUnits, 0, resUnits.size() - 1);
+  auto last1 = unique(resUnits.begin(), resUnits.end());
+  resUnits.erase(last1, resUnits.end());
+
+  // test if there are no two unit clauses having literals of opposite parity
+  int ru_bound = resUnits.size();
+  for (int i = 0; i < ru_bound - 1; ++i) {
+    Clause unit_i = resUnits[i];
+    int index = 0;
+    while (index < unit_i.size() && unit_i[index].sign == lnone)
+      index++;
+    if (index < ru_bound) {
+      for (int j = i + 1; j < ru_bound; ++j) {
+        Clause unit_j = resUnits[j];
+        if ((unit_i[index].sign == lpos && unit_j[index].sign == lneg &&
+             unit_i[index].pval > unit_j[index].nval) ||
+            (unit_i[index].sign == lneg && unit_j[index].sign == lpos &&
+             unit_i[index].nval < unit_j[index].pval)) {
+          Clause emptyClause(unit_i.size(), Literal::none());
+          Formula emptyFormula;
+          emptyFormula.push_back(emptyClause);
+          return emptyFormula;
         }
       }
     }
+  }
 
-    clauses.insert(clauses.end(), resUnits.begin(), resUnits.end());
-    // sort(clauses.begin(), clauses.end()), cmp_numlit;
-    sort_formula(clauses, 0, clauses.size() - 1);
-    auto last2 = unique(clauses.begin(), clauses.end());
-    clauses.erase(last2, clauses.end());
-    */
+  clauses.insert(clauses.end(), resUnits.begin(), resUnits.end());
+  // sort(clauses.begin(), clauses.end()), cmp_numlit;
+  sort_formula(clauses, 0, clauses.size() - 1);
+  auto last2 = unique(clauses.begin(), clauses.end());
+  clauses.erase(last2, clauses.end());
 
   return clauses;
 }
@@ -778,11 +799,16 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
 
   // perform set cover
   while (!R.empty()) {
+    cerr << "\r" << R.size();
+    flush(cerr);
+
     // How many tuples does the clause falsify (intersect)?
     unordered_map<reference_wrapper<const Clause>, size_t, std::hash<Clause>>
         intersect;
     for (const Clause &clause : SubSets)
       intersect[clause] = 0;
+
+#pragma omp parallel for
     for (size_t i : R) {
       const Row &tuple = Universe[i];
       for (const Clause &clause : SubSets) {
@@ -792,29 +818,49 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
       }
     }
 
-    size_t maxw = 0;
-    Clause maxset;
+    struct maxclause {
+      size_t maxw;
+      const Clause *maxset;
+
+      static maxclause max(maxclause a, maxclause b) {
+        return a.maxw > b.maxw ? a : b;
+      }
+    };
+
+#pragma omp declare reduction(maxVal:maxclause : omp_out =                     \
+                                  maxclause::max(omp_out, omp_in))
+
+    maxclause m = {.maxw = 0, .maxset = &SubSets[0]};
+
+#pragma omp parallel for reduction(maxVal : m)
     for (const Clause &clause : SubSets) {
-      if (intersect[clause] > maxw) {
-        maxw = intersect[clause];
-        maxset = clause;
+      if (intersect[clause] > m.maxw) {
+        m.maxw = intersect[clause];
+        m.maxset = &clause;
       }
     }
 
+    size_t maxw = m.maxw;
+    // cannot be invalidated: SubSets is immutable.
+    const Clause *maxset = m.maxset;
+
     if (maxw == 0)
       break;
-    selected.push_back(maxset);
+    selected.push_back(*maxset);
 
-    auto it = R.begin();
-    while (it != R.end()) {
-      const Row &tuple = Universe[*it];
-      if (incidence[make_pair(cref(tuple), cref(maxset))] == PRESENT) {
+    size_t i = 0;
+    while (i < R.size()) {
+      const Row &tuple = Universe[R[i]];
+      if (incidence[make_pair(cref(tuple), cref(*maxset))] == PRESENT) {
         for (const Clause &clause : SubSets) {
           incidence[make_pair(cref(tuple), cref(clause))] = ABSENT;
         }
-        it = R.erase(it);
+        if (i != R.size() - 1) {
+          swap(R[i], R[R.size() - 1]);
+        }
+        R.resize(R.size() - 1);
       } else {
-        ++it;
+        ++i;
       }
     }
   }
@@ -824,8 +870,8 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
   return selected;
 }
 
+// perform redundancy elimination on formula according to cooking
 void cook(Formula &formula) {
-  // perform redundancy elimination on formula according to cooking
   if (!formula.empty()) {
     if (cooking == ckRAW)
       sort_formula(formula, 0, formula.size() - 1);
