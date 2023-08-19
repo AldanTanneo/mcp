@@ -88,7 +88,7 @@ void Row::restrict(const Mask &m) {
     if (m[j]) {
       // invariant: col <= j
       data[col] = data[j];
-      col += 1;
+      col++;
     }
   }
   data.resize(col);
@@ -260,6 +260,28 @@ void Matrix::remove_duplicates() {
 }
 
 //------------------------------------------------------------------------------
+
+// template <typename T>
+// bool sat_clause(const T &tuple, const Clause &clause) {
+//   // does the tuple satisfy the clause?
+//   for (size_t i = 0; i < tuple.size(); ++i) {
+//     if (clause[i].sat(tuple[i])) {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
+
+// template <typename T>
+// bool sat_formula(const T &tuple, const Formula &formula) {
+//   // does the tuple satisfy the formula?
+//   for (Clause cl : formula) {
+//     if (!sat_clause(tuple, cl)) {
+//       return false;
+//     }
+//   }
+//   return true;
+// }
 
 bool sat_clause(const RowView &tuple, const Clause &clause) {
   // does the tuple satisfy the clause?

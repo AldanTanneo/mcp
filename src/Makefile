@@ -23,8 +23,10 @@
 ##**************************************************************************
 
 BIN   := ../bin
-RELEASE_FLAGS := -std=c++14 -O3 -march=native -flto -fopenmp -Wall -Werror -Wfatal-errors
+VANILLA_FLAGS := -O4
+RELEASE_FLAGS := -std=c++14 -O4 -march=native -flto -fopenmp -Wall -Werror -Wfatal-errors
 DEBUG_FLAGS := -std=c++14 -g -Og -fopenmp -Wall -Werror -Wfatal-errors -fsanitize=undefined -fsanitize=address
+# CXX   := g++ $(VANILLA_FLAGS)
 CXX   := g++ $(RELEASE_FLAGS)
 
 .PHONY: compile compile-no-mpi seq export clean scratch uniq
