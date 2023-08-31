@@ -73,10 +73,7 @@ void adjust() { // adjusts the input parameters
     }
   }
 
-  if (offset < 0 && print != pDIMACS) {
-    cout << "+++ WARNING: offset reset to 0" << endl;
-    offset = 0;
-  } else if (offset <= 0 && print == pDIMACS) {
+  if (offset <= 0 && print == pDIMACS) {
     cout << "+++ WARNING: offset reset to 1" << endl;
     offset = 1;
   }

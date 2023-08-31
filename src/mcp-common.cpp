@@ -599,7 +599,7 @@ Formula unitres(const Formula &formula) { // unit resolution
   while (!units.empty() && !clauses.empty()) {
     Clause unit = units.front();
     units.pop_front();
-    int index = 0;
+    size_t index = 0;
     while (unit[index].sign == lnone)
       index++;
     for (size_t j = 0; j < clauses.size(); j++) {
@@ -746,8 +746,18 @@ Formula redundant(const Formula &formula) { // eliminating redundant clauses
     for (size_t i = 0; i < pivot.size(); ++i) {
       if (pivot[i].sign != lnone) {
         Clause newclause(lngt, Literal::none());
-        newclause[i] = pivot[i].swap();
-        newUnits.push_back(newclause);
+        auto lit = pivot[i].negate();
+        if (lit.sign != lboth && lit.sign != lnone) {
+          newclause[i] = lit;
+          newUnits.push_back(newclause);
+        } else {
+          lit.sign = lpos;
+          newclause[i] = lit;
+          newUnits.push_back(newclause);
+          lit.sign = lneg;
+          newclause[i] = lit;
+          newUnits.push_back(newclause);
+        }
       }
     }
     newUnits.insert(newUnits.end(), prefix.begin(), prefix.end());
@@ -815,10 +825,10 @@ Formula SetCover(const Matrix &Universe, const Formula &SubSets) {
     for (const Clause &clause : SubSets)
       intersect[clause] = 0;
 
+    for (const Clause &clause : SubSets) {
 #pragma omp parallel for
-    for (size_t i : R) {
-      const Row &tuple = Universe[i];
-      for (const Clause &clause : SubSets) {
+      for (size_t i : R) {
+        const Row &tuple = Universe[i];
         if (incidence[make_pair(cref(tuple), cref(clause))] == PRESENT) {
           ++intersect[clause];
         }

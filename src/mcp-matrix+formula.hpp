@@ -320,13 +320,26 @@ struct Literal {
   // `x >= d` becomes `x <= n - d`.
   inline Literal swap() const noexcept {
     Literal res;
-    if (sign & lneg && nval < DMAX) {
+    if (sign & lneg) {
       res.sign = lpos;
       res.pval = DMAX - nval;
     }
-    if (sign & lpos && pval > 0) {
+    if (sign & lpos) {
       res.sign = Sign(res.sign | lneg);
       res.nval = DMAX - pval;
+    }
+    return res;
+  }
+
+  inline Literal negate() const noexcept {
+    Literal res;
+    if (sign & lneg && nval < DMAX) {
+      res.sign = lpos;
+      res.pval = nval + 1;
+    }
+    if (sign & lpos && nval > 0) {
+      res.sign = Sign(res.sign | lneg);
+      res.nval = pval - 1;
     }
     return res;
   }
