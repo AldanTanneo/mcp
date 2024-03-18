@@ -89,6 +89,7 @@ extern Strategy strategy;
 // extern Display display;
 extern std::string input;
 extern std::string output;
+extern std::string headerput;
 extern bool disjoint;
 // extern int arity;
 
@@ -100,6 +101,7 @@ extern Arch arch;
 extern std::string latex; // file to store latex output
 
 extern std::ifstream infile;
+extern std::ifstream headerfile;
 extern std::ofstream outfile;
 extern std::ofstream latexfile;
 extern std::string formula_output;

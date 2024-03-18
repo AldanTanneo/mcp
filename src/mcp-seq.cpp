@@ -110,29 +110,60 @@ void print_arg() {
   cout << "@@@ debug         = " << (debug ? "yes" : "no") << endl << endl;
 }
 
-void read_matrix(Group_of_Matrix &matrix) {
-  // reads the input matrices
-  int ind_a, ind_b;
-  string line;
+void read_header () {
+  streambuf *backup;
+  
+  if (headerput.empty())
+    varswitch = false;
+  else {
+    headerfile.open(headerput);
+    if (headerfile.is_open()) {
+      backup = cin.rdbuf();
+      cin.rdbuf(headerfile.rdbuf());
+    } else {
+      cerr << "+++ Cannot open header file " << headerput << endl
+	   << "... Continue with fake variable names" << endl;
+      varswitch = false;
+      return;
+    }
 
-  getline(cin, line);
-  istringstream inds(line);
-  inds >> ind_a >> ind_b;
-  cout << "+++ Indication line: " << ind_a << " " << ind_b << endl;
-
-  if (ind_a == 1) {
     cout << "+++ Own names for variables" << endl;
     varswitch = true;
 
-    getline(cin, line);
-    istringstream vars(line);
-    string vname;
-    while (vars >> vname)
-      varnames.push_back(vname);
+    string line;
+    while(getline(cin, line))
+      varnames.push_back(line);
     arity = varnames.size();
+
+    headerfile.close();
+    cin.rdbuf(backup);
   }
-  if (ind_b == 1)
-    getline(cin, line);
+}
+
+void read_matrix(Group_of_Matrix &matrix) {
+  // reads the input matrices
+  string line;
+
+  // moved to read_header and changed to eliminate indicator line
+  // int ind_a, ind_b;
+  // getline(cin, line);
+  // istringstream inds(line);
+  // inds >> ind_a >> ind_b;
+  // cout << "+++ Indication line: " << ind_a << " " << ind_b << endl;
+
+  // if (ind_a == 1) {
+  //   cout << "+++ Own names for variables" << endl;
+  //   varswitch = true;
+
+  //   getline(cin, line);
+  //   istringstream vars(line);
+  //   string vname;
+  //   while (vars >> vname)
+  //     varnames.push_back(vname);
+  //   arity = varnames.size();
+  // }
+  // if (ind_b == 1)
+  //   getline(cin, line);
 
   string group;
   size_t numline = 0;
@@ -727,6 +758,7 @@ int main(int argc, char **argv) {
   read_arg(argc, argv);
   adjust();
   print_arg();
+  read_header();
   read_matrix(group_of_matrix);
   print_matrix(group_of_matrix);
 
