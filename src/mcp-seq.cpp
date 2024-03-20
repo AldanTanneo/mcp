@@ -29,6 +29,7 @@
 #include <numeric>
 #include <queue>
 #include <sstream>
+#include <chrono>
 
 #include "mcp-bucket.hpp"
 #include "mcp-common.hpp"
@@ -751,8 +752,6 @@ void OneToAllNosection() {
 //////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv) {
-  time_t start_time = time(nullptr);
-
   version += arch_strg[arch];
 
   read_arg(argc, argv);
@@ -761,6 +760,9 @@ int main(int argc, char **argv) {
   read_header();
   read_matrix(group_of_matrix);
   print_matrix(group_of_matrix);
+
+  // start clock
+  auto clock_start = chrono::high_resolution_clock::now();
 
   switch (action) {
   case aONE:
@@ -777,8 +779,13 @@ int main(int argc, char **argv) {
     break;
   }
 
-  time_t finish_time = time(nullptr);
-  cout << "+++ time = " << time2string(int(difftime(finish_time, start_time)))
+  // stop the clock
+  auto clock_stop = chrono::high_resolution_clock::now();
+  auto duration = chrono::duration_cast<chrono::milliseconds>(clock_stop - clock_start);
+  size_t dtime = duration.count();
+
+  cout << "+++ time = "
+       << time2string(dtime)
        << endl;
 
   cout << "+++ end of run +++" << endl;
